@@ -29,12 +29,32 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-# ── File paths ──────────────────────────────────────────────────────────────────────────────
+
+def _find_catalog_file(base: Path) -> Path:
+    """Return the most recently modified PSA catalog file in base dir.
+
+    Accepts both CSV (old PSA report format) and XLS/HTML (new Salesforce
+    'All Skills and Certifications' export format).
+    """
+    candidates = (
+        list(base.glob("PSA Skills and Certifications Report*.csv"))
+        + list(base.glob("All Skills and Certifications*.xls"))
+        + list(base.glob("All Skills and Certifications*.csv"))
+    )
+    if not candidates:
+        raise FileNotFoundError(
+            "No PSA catalog file found in the project folder.\n"
+            "Export 'All Skills and Certifications' from org62 Reports and copy it here."
+        )
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+# ── File paths ──────────────────────────────────────────────────────────────────────────────────────
 DOWNLOADS = Path(__file__).parent
 
-CATALOG_FILE     = DOWNLOADS / "PSA Skills and Certifications Report-2026-09-15-18-20-37.csv"
-AGENTFORCE_FILE  = DOWNLOADS / "Agentforce Ready and Expert Skills Ratings  - Sheet1.csv"
-DEVOPS_FILE      = DOWNLOADS / "Leveling Guides - DevOps .csv"
+CATALOG_FILE     = _find_catalog_file(DOWNLOADS)
+AGENTFORCE_FILE  = DOWNLOADS / "Agentforce Ready and Expert Skills Ratings  - Agentforce Skills .csv"
+DEVOPS_FILE      = DOWNLOADS / "FY26 DevOps Leveling Guide (Working Copy) - Current DevOps .csv"
 CERT_FILE        = DOWNLOADS / "employee_certifications.csv"
 RR_FILE          = DOWNLOADS / "agentforce_resource_requests.csv"
 
@@ -96,19 +116,55 @@ def rating_int(rating_str: str) -> int:
     return RATING_ORDER.get(rating_str.strip(), 0)
 
 
+def _parse_html_xls(path: Path) -> list[dict]:
+    """Parse a Salesforce HTML-as-XLS export into a list of row dicts."""
+    text = path.read_bytes().decode("utf-8", errors="replace")
+    rows_raw = re.findall(r"<tr[^>]*>(.*?)</tr>", text, re.DOTALL | re.IGNORECASE)
+
+    def strip_tags(s: str) -> str:
+        s = re.sub(r"<[^>]+>", "", s).strip()
+        return (s.replace("&gt;", ">").replace("&lt;", "<")
+                 .replace("&amp;", "&").replace("&nbsp;", " "))
+
+    def cells(row_html: str) -> list[str]:
+        return [strip_tags(c) for c in
+                re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", row_html, re.DOTALL | re.IGNORECASE)]
+
+    if not rows_raw:
+        return []
+    headers = cells(rows_raw[0])
+    result = []
+    for raw in rows_raw[1:]:
+        vals = cells(raw)
+        if vals:
+            result.append(dict(zip(headers, vals)))
+    return result
+
+
 def load_catalog(path: Path) -> dict:
     index = {}
-    with open(path, encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            name = row["Skill or Certification: Skill or Certification Name"].strip()
-            index[normalize(name)] = {
-                "catalog_name":        name,
-                "catalog_id":          row["Skill or Certification: ID"].strip(),
-                "catalog_description": row["Description"].strip(),
-                "catalog_type":        row["Type"].strip(),
-                "catalog_category":    row["Category"].strip(),
-                "catalog_parent_cat":  row["Parent Category"].strip(),
-            }
+    content_start = path.read_bytes()[:512].lstrip(b"\xff\xfe").lstrip(b"\xef\xbb\xbf")
+    is_html = content_start.lstrip().lower().startswith(b"<")
+
+    rows: list[dict]
+    if is_html:
+        rows = _parse_html_xls(path)
+    else:
+        with open(path, encoding="utf-8-sig") as f:
+            rows = list(csv.DictReader(f))
+
+    for row in rows:
+        name = row.get("Skill or Certification: Skill or Certification Name", "").strip()
+        if not name:
+            continue
+        index[normalize(name)] = {
+            "catalog_name":        name,
+            "catalog_id":          row.get("Skill or Certification: ID", "").strip(),
+            "catalog_description": row.get("Description", "").strip(),
+            "catalog_type":        row.get("Type", "").strip(),
+            "catalog_category":    row.get("Category", "").strip(),
+            "catalog_parent_cat":  row.get("Parent Category", "").strip(),
+        }
     return index
 
 
@@ -806,7 +862,7 @@ def validate_record(row: dict, catalog: dict, agentforce: dict, devops: dict,
             result["Grade Floor Met"] = "Yes"
         else:
             result["Grade Floor Met"] = "No"
-            grade_label = f"{check_grade} ({DEVOPS_TITLES[DEVOPS_GRADES.index(check_grade)]})"\
+            grade_label = f"{check_grade} ({DEVOPS_TITLES[DEVOPS_GRADES.index(check_grade)])}"\
                 if check_grade in DEVOPS_GRADES else check_grade
             notes.append(
                 f"DEVOPS: Rating {rating_str} is below the {grade_label} minimum of {grade_min}+. "
