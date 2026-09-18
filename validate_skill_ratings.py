@@ -660,13 +660,16 @@ _KEYWORD_BLOCKLIST = {"platform", "certified", "salesforce", "cloud"}
 
 def cert_corroborates_skill(skill_name: str, cert_list: list) -> tuple:
     norm_skill = normalize(skill_name)
+    # Replace non-word/non-space chars with a space so "environment/sandbox"
+    # produces ["environment", "sandbox"], not ["environmentsandbox"].
     skill_words = [
-        w for w in re.sub(r"[^\w\s]", "", norm_skill).split()
+        w for w in re.sub(r"[^\w\s]", " ", norm_skill).split()
         if len(w) >= 4
         and w not in _CERT_STOPWORDS
         and w not in _KEYWORD_BLOCKLIST
     ]
 
+    matching_certs: list[str] = []
     for cert_name, _ in cert_list:
         norm_cert = normalize(cert_name)
 
@@ -679,14 +682,18 @@ def cert_corroborates_skill(skill_name: str, cert_list: list) -> tuple:
         if excluded:
             continue
 
-        if skill_words and any(w in norm_cert for w in skill_words):
-            return True, cert_name
+        matched = (skill_words and any(w in norm_cert for w in skill_words))
+        if not matched:
+            for cert_pattern, covered_skills in CERT_DOMAIN_MAP.items():
+                if cert_pattern in norm_cert:
+                    if any(kw in norm_skill for kw in covered_skills):
+                        matched = True
+                        break
+        if matched:
+            matching_certs.append(cert_name)
 
-        for cert_pattern, covered_skills in CERT_DOMAIN_MAP.items():
-            if cert_pattern in norm_cert:
-                if any(kw in norm_skill for kw in covered_skills):
-                    return True, cert_name
-
+    if matching_certs:
+        return True, " | ".join(matching_certs)
     return False, ""
 
 
@@ -862,8 +869,11 @@ def validate_record(row: dict, catalog: dict, agentforce: dict, devops: dict,
             result["Grade Floor Met"] = "Yes"
         else:
             result["Grade Floor Met"] = "No"
-            grade_label = f"{check_grade} ({DEVOPS_TITLES[DEVOPS_GRADES.index(check_grade)])}"\
-                if check_grade in DEVOPS_GRADES else check_grade
+            if check_grade in DEVOPS_GRADES:
+                title = DEVOPS_TITLES[DEVOPS_GRADES.index(check_grade)]
+                grade_label = f"{check_grade} ({title})"
+            else:
+                grade_label = check_grade
             notes.append(
                 f"DEVOPS: Rating {rating_str} is below the {grade_label} minimum of {grade_min}+. "
                 f"Full requirements: {grade_summary}"
