@@ -19,12 +19,16 @@ Results are written to mass_approve_results.json in the same directory.
 """
 
 import csv
+import datetime
 import json
 import time
 from pathlib import Path
 
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
+
+# Timestamp stamped on every screenshot filename for this process invocation
+_RUN_TS = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 CSV_PATH = (
     Path.home()
@@ -278,19 +282,35 @@ def fill_and_confirm_modal(page, comment, confirm_label):
         "Approve Skill or Certification Rating" / "Reject Skill or Certification Rating"
     Modal-closed signal: textarea transitions to hidden state.
     """
+    # Capture the page immediately after the button click — shows whether the
+    # modal actually opened (this is the first thing to check when debugging)
+    screenshot(page, f"{confirm_label.lower()}_01_after_btn_click")
+
     # Wait for textarea — only present when the correct modal is open
     textarea = page.locator("textarea.slds-textarea")
-    textarea.wait_for(state="visible", timeout=15_000)
+    try:
+        textarea.wait_for(state="visible", timeout=15_000)
+    except PWTimeout:
+        screenshot(page, f"{confirm_label.lower()}_ERROR_textarea_not_visible")
+        raise
     textarea.fill(comment)
 
     # title is stable and unique; avoids colliding with same-text header buttons
     title = f"{confirm_label} Skill or Certification Rating"
     confirm_btn = page.locator(f"button[title='{title}']")
-    confirm_btn.wait_for(state="visible", timeout=10_000)
+    try:
+        confirm_btn.wait_for(state="visible", timeout=10_000)
+    except PWTimeout:
+        screenshot(page, f"{confirm_label.lower()}_ERROR_confirm_btn_not_visible")
+        raise
     confirm_btn.click()
 
     # Textarea disappearing is a reliable signal the modal closed
-    textarea.wait_for(state="hidden", timeout=30_000)
+    try:
+        textarea.wait_for(state="hidden", timeout=30_000)
+    except PWTimeout:
+        screenshot(page, f"{confirm_label.lower()}_ERROR_modal_not_closing")
+        raise
     page.wait_for_timeout(1_500)
 
 
@@ -299,6 +319,13 @@ def take_debug_screenshot(page, tag):
     path = SCREENSHOTS_DIR / f"debug_{tag}.png"
     page.screenshot(path=str(path), full_page=True)
     print(f"  [debug] Screenshot saved: {path}")
+
+
+def screenshot(page, step):
+    """Save a timestamped workflow-step screenshot for the current run."""
+    path = SCREENSHOTS_DIR / f"debug_{_RUN_TS}_{step}.png"
+    page.screenshot(path=str(path), full_page=True)
+    print(f"  [screenshot] {path.name}")
 
 
 # ---------------------------------------------------------------------------
@@ -326,8 +353,10 @@ def execute_approval_pass(page, approvals):
         print(f"  Missing IDs: {missing[:5]}{'...' if len(missing) > 5 else ''}")
 
     if selected > 0:
+        screenshot(page, f"approval_01_{selected}_rows_selected")
         click_page_button(page, "Approve")
         fill_and_confirm_modal(page, APPROVE_COMMENT, "Approve")
+        screenshot(page, "approval_02_after_confirm")
 
     return {
         "attempted": len(approval_ids),
@@ -347,7 +376,7 @@ def execute_rejection_pass(page, rejections, all_rows):
     """
     results = []
 
-    for item in rejections:
+    for idx, item in enumerate(rejections, start=1):
         emp = item["employee"]
         skill = item["skill"]
         notes = item["notes"]
@@ -376,10 +405,13 @@ def execute_rejection_pass(page, rejections, all_rows):
             results.append(entry)
             continue
 
+        screenshot(page, f"reject_{idx:02d}_01_selected")
+
         try:
             click_page_button(page, "Reject")
             fill_and_confirm_modal(page, notes, "Reject")
             entry["status"] = "success"
+            screenshot(page, f"reject_{idx:02d}_02_done")
             print(f"    Rejected OK.")
         except Exception as exc:
             entry["status"] = "failed"
@@ -435,6 +467,8 @@ def run():
             browser.close()
             return
 
+        screenshot(page, f"run_01_grid_loaded_{len(all_rows)}_rows")
+
         # ── Pass 1: Approvals ─────────────────────────────────────────────
         print(f"\n[3/4] Pass 1 — Approving {len(approvals)} records en masse…")
         approval_result = execute_approval_pass(page, approvals)
@@ -450,6 +484,7 @@ def run():
             wait_for_grid(page)
             all_rows = get_all_rows(page)
             print(f"    {len(all_rows)} rows remaining.")
+            screenshot(page, f"run_02_after_approval_{len(all_rows)}_rows_remain")
         except PWTimeout:
             print("WARNING: Grid not visible after approval — proceeding with original row data.")
 
