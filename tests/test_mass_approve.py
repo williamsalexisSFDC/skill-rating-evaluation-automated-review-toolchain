@@ -244,37 +244,34 @@ class TestFillAndConfirmModal:
     def _setup(self):
         """
         page.locator("textarea.slds-textarea") → textarea locator
-        page.locator("button[title=...]")      → confirm_btn locator
+        page.evaluate(js, title)               → shadow-DOM pierce click (returns True)
         No [role='dialog'] lookup — we skip that to avoid the hidden Aura error dialog.
+        No page.locator for the confirm button — it lives in native shadow DOM.
         """
         page = _mock_page()
         textarea = MagicMock()
-        confirm_btn = MagicMock()
+        page.evaluate.return_value = True  # JS shadow-pierce click succeeds by default
 
         def locator_side_effect(selector, **kwargs):
             lc = MagicMock()
             if "slds-textarea" in selector:
-                # textarea locator — .fill() and .wait_for() called on it directly
                 lc.fill = textarea.fill
                 lc.wait_for = textarea.wait_for
-                return lc
-            elif "button[title=" in selector:
-                lc.wait_for = confirm_btn.wait_for
-                lc.click = confirm_btn.click
                 return lc
             return lc
 
         page.locator.side_effect = locator_side_effect
-        return page, textarea, confirm_btn
+        return page, textarea
 
     def test_fills_textarea_and_clicks_confirm(self):
-        page, textarea, confirm_btn = self._setup()
+        page, textarea = self._setup()
         mas.fill_and_confirm_modal(page, "my comment", "Approve")
         textarea.fill.assert_called_once_with("my comment")
-        confirm_btn.click.assert_called_once()
+        # Confirm button is clicked via JS evaluate (shadow DOM pierce)
+        page.evaluate.assert_called()
 
     def test_waits_for_textarea_to_open_and_close(self):
-        page, textarea, confirm_btn = self._setup()
+        page, textarea = self._setup()
         mas.fill_and_confirm_modal(page, "comment", "Reject")
         # wait_for called at least twice: visible (open) + hidden (closed)
         assert textarea.wait_for.call_count >= 2
@@ -283,41 +280,40 @@ class TestFillAndConfirmModal:
         assert "hidden" in states
 
     def test_textarea_selected_by_slds_class(self):
-        page, textarea, confirm_btn = self._setup()
+        page, textarea = self._setup()
         mas.fill_and_confirm_modal(page, "x", "Approve")
         selectors = [c[0][0] for c in page.locator.call_args_list]
         assert any("slds-textarea" in s for s in selectors)
 
-    def test_confirm_button_selected_by_title(self):
-        page, textarea, confirm_btn = self._setup()
+    def test_confirm_button_clicked_via_js_evaluate(self):
+        """Confirm button is inside native shadow DOM — click must go through JS evaluate."""
+        page, textarea = self._setup()
         mas.fill_and_confirm_modal(page, "x", "Reject")
-        title_selectors = [
-            c[0][0] for c in page.locator.call_args_list
-            if "button[title=" in c[0][0]
-        ]
-        assert len(title_selectors) == 1
-        assert "Reject Skill or Certification Rating" in title_selectors[0]
+        js_code = page.evaluate.call_args[0][0]
+        title_arg = page.evaluate.call_args[0][1]
+        assert "findAndClick" in js_code
+        assert title_arg == "Reject Skill or Certification Rating"
 
     def test_no_role_dialog_lookup(self):
         """Regression: must not wait on [role='dialog'] — matches hidden Aura error box."""
-        page, textarea, confirm_btn = self._setup()
+        page, textarea = self._setup()
         mas.fill_and_confirm_modal(page, "x", "Approve")
         selectors = [c[0][0] for c in page.locator.call_args_list]
         assert not any("role='dialog'" in s or 'role="dialog"' in s for s in selectors)
 
     def test_initial_screenshot_captured_after_btn_click(self):
         """Screenshot is taken immediately on entry — captures page state after button click."""
-        page, textarea, confirm_btn = self._setup()
+        page, textarea = self._setup()
         mas.fill_and_confirm_modal(page, "x", "Approve")
         assert page.screenshot.call_count >= 1
         first_path = page.screenshot.call_args_list[0][1]["path"]
         assert "after_btn_click" in first_path
 
-    def _setup_timeout(self, textarea_side_effect=None, confirm_side_effect=None):
-        """Setup with configurable timeout side effects."""
+    def _setup_timeout(self, textarea_side_effect=None):
+        """Setup with configurable textarea wait side effects."""
         page = _mock_page()
         textarea = MagicMock()
-        confirm_btn = MagicMock()
+        page.evaluate.return_value = True  # JS shadow-pierce click succeeds by default
 
         def locator_side_effect(selector, **kwargs):
             lc = MagicMock()
@@ -325,22 +321,16 @@ class TestFillAndConfirmModal:
                 lc.fill = textarea.fill
                 lc.wait_for = textarea.wait_for
                 return lc
-            elif "button[title=" in selector:
-                lc.wait_for = confirm_btn.wait_for
-                lc.click = confirm_btn.click
-                return lc
             return lc
 
         page.locator.side_effect = locator_side_effect
         if textarea_side_effect is not None:
             textarea.wait_for.side_effect = textarea_side_effect
-        if confirm_side_effect is not None:
-            confirm_btn.wait_for.side_effect = confirm_side_effect
-        return page, textarea, confirm_btn
+        return page, textarea
 
     def test_error_screenshot_and_reraise_on_textarea_timeout(self):
         from playwright.sync_api import TimeoutError as PWTimeout
-        page, textarea, _ = self._setup_timeout(
+        page, textarea = self._setup_timeout(
             textarea_side_effect=PWTimeout("textarea timeout")
         )
         with pytest.raises(PWTimeout):
@@ -349,19 +339,18 @@ class TestFillAndConfirmModal:
         paths = [c[1]["path"] for c in page.screenshot.call_args_list]
         assert any("ERROR" in p for p in paths)
 
-    def test_error_screenshot_and_reraise_on_confirm_btn_timeout(self):
-        from playwright.sync_api import TimeoutError as PWTimeout
-        page, _, confirm_btn = self._setup_timeout(
-            confirm_side_effect=PWTimeout("btn timeout")
-        )
-        with pytest.raises(PWTimeout):
+    def test_error_screenshot_and_raise_when_confirm_btn_not_found(self):
+        """RuntimeError + error screenshot when JS cannot find the confirm button."""
+        page, textarea = self._setup()
+        page.evaluate.return_value = False  # button not found in any shadow root
+        with pytest.raises(RuntimeError, match="not found"):
             mas.fill_and_confirm_modal(page, "x", "Approve")
         paths = [c[1]["path"] for c in page.screenshot.call_args_list]
         assert any("ERROR" in p for p in paths)
 
     def test_error_screenshot_and_reraise_on_modal_not_closing(self):
         from playwright.sync_api import TimeoutError as PWTimeout
-        page, textarea, _ = self._setup_timeout(
+        page, textarea = self._setup_timeout(
             # First call (visible) succeeds, second call (hidden) raises
             textarea_side_effect=[None, PWTimeout("modal stuck")]
         )
