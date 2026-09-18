@@ -270,6 +270,8 @@ def _summarize_notes(notes: str, full_justification: bool = False) -> str:
             if m:
                 parts_d.append(f"{m.group(1)} RRs on file, need {m.group(2)}+")
             short.append("AF delivery: " + ("; ".join(parts_d) if parts_d else "evidence missing"))
+        elif p.startswith("AGENTFORCE:") and "requires af enabled" in p.lower():
+            short.append("AF: 4-Expert requires AF Enabled (Data Cloud cert + superbadges first)")
         elif p.startswith("AGENTFORCE:") and "data 360" in p.lower():
             short.append("AF: Data Cloud cert required (Agentforce Specialist not sufficient)")
         elif p.startswith("AGENTFORCE:"):

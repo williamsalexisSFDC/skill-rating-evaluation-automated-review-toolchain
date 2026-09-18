@@ -1188,6 +1188,48 @@ class TestValidateRecordAfEnabled:
                                      minimal_devops, {})
         assert "AF NOT ENABLED" not in result.get("Validation Notes", "")
 
+    def test_af_not_enabled_4expert_is_change_required(self, monkeypatch, minimal_catalog,
+                                                       minimal_agentforce, minimal_devops,
+                                                       certs_with_af_specialist):
+        """Regression: 4-Expert on an AF skill requires AF Enabled — must be Change Required."""
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset())
+        row = {"Resource": "Alice Test", "Skill or Certification": "Agentforce Operations",
+               "Rating": "4- Specialist", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, certs_with_af_specialist)
+        notes = result["Validation Notes"]
+        assert "AGENTFORCE:" in notes
+        assert "requires AF Enabled" in notes
+        assert "AF NOT ENABLED:" not in notes
+
+    def test_af_not_enabled_3advanced_is_still_informational(self, monkeypatch, minimal_catalog,
+                                                              minimal_agentforce, minimal_devops,
+                                                              certs_with_af_specialist):
+        """3-Advanced on AF skill while not AF Enabled stays informational (AF NOT ENABLED:),
+        not Change Required — employees need this path to progress toward AF Ready."""
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset())
+        row = {"Resource": "Alice Test", "Skill or Certification": "Agentforce Operations",
+               "Rating": "3- Advanced", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, certs_with_af_specialist)
+        notes = result["Validation Notes"]
+        assert "AF NOT ENABLED:" in notes
+        assert "AGENTFORCE:" not in notes.replace("AF NOT ENABLED:", "")
+
+    def test_af_enabled_4expert_no_af_enabled_gate(self, monkeypatch, minimal_catalog,
+                                                   minimal_agentforce, minimal_devops,
+                                                   certs_with_af_specialist):
+        """AF Enabled employee rating 4-Expert must not get the AF Enabled gate note."""
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset({"Alice Test"}))
+        row = {"Resource": "Alice Test", "Skill or Certification": "Agentforce Operations",
+               "Rating": "4- Specialist", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, certs_with_af_specialist)
+        assert "requires AF Enabled" not in result.get("Validation Notes", "")
+
     def test_af_ready_skill_field_populated(self, monkeypatch, minimal_catalog,
                                             minimal_agentforce, minimal_devops):
         monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})

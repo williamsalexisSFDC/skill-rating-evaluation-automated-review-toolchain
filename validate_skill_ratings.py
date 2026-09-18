@@ -849,7 +849,19 @@ def validate_record(row: dict, catalog: dict, agentforce: dict, devops: dict,
 
         is_enabled = employee in AF_ENABLED_EMPLOYEES
         result["AF Enabled"] = "Yes" if is_enabled else "No"
-        if not is_enabled and rating >= 3:
+        if not is_enabled and rating >= 4:
+            # 4-Expert on an AF skill requires AF Enabled — Change Required.
+            # Expert-level mastery of the AF stack presupposes the Data Cloud
+            # credential and superbadges that define foundational enablement.
+            notes.append(
+                f"AGENTFORCE: 4-Expert rating on '{skill_name}' requires AF Enabled status. "
+                f"{employee} has not completed AF Enabled requirements (Agentforce Champion, "
+                f"Innovator, and Legend Trailhead superbadges + Salesforce Certified Data Cloud "
+                f"/ Data 360 Consultant cert). AF Enabled is a prerequisite for expert-level "
+                f"Agentforce skill claims."
+            )
+        elif not is_enabled and rating == 3:
+            # 3-Advanced is the path toward AF Ready — informational only.
             notes.append(
                 f"AF NOT ENABLED: {employee} has not completed AF Enabled requirements "
                 f"(Agentforce Champion, Innovator, and Legend Trailhead superbadges + "

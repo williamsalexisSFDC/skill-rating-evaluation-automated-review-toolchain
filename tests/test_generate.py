@@ -79,6 +79,18 @@ class TestPreDisposition:
         )
         assert gen._pre_disposition(notes) == "Discuss"
 
+    def test_af_4expert_not_enabled_returns_change_required(self):
+        # Regression: 4-Expert on an AF skill while not AF Enabled uses AGENTFORCE: prefix
+        # which must trigger Change Required, not Approve or Discuss.
+        notes = (
+            "AGENTFORCE: 4-Expert rating on 'Build and Deploy Technical Capabilities' "
+            "requires AF Enabled status. Craig Scott has not completed AF Enabled requirements "
+            "(Agentforce Champion, Innovator, and Legend Trailhead superbadges + Salesforce "
+            "Certified Data Cloud / Data 360 Consultant cert). AF Enabled is a prerequisite "
+            "for expert-level Agentforce skill claims."
+        )
+        assert gen._pre_disposition(notes) == "Change Required"
+
 
 # ---------------------------------------------------------------------------
 # _summarize_notes()
@@ -218,6 +230,20 @@ class TestSummarizeNotes:
         assert "Craig Scott" in result
         assert "enablement is complete." in result
         assert result == notes
+
+    def test_af_4expert_not_enabled_summarize(self):
+        # The AGENTFORCE: 4-Expert gate note must produce a concise flag, not
+        # fall through to the generic "AF: evidence gap" catch-all.
+        notes = (
+            "AGENTFORCE: 4-Expert rating on 'Build and Deploy Technical Capabilities' "
+            "requires AF Enabled status. Craig Scott has not completed AF Enabled requirements "
+            "(Agentforce Champion, Innovator, and Legend Trailhead superbadges + Salesforce "
+            "Certified Data Cloud / Data 360 Consultant cert). AF Enabled is a prerequisite "
+            "for expert-level Agentforce skill claims."
+        )
+        result = gen._summarize_notes(notes)
+        assert "4-Expert requires AF Enabled" in result
+        assert "evidence gap" not in result
 
 
 # ---------------------------------------------------------------------------
