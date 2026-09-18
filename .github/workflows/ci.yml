@@ -1,3 +1,4 @@
+---
 name: CI
 
 on:
@@ -30,7 +31,12 @@ jobs:
             google-auth-oauthlib \
             cryptography \
             pytest \
-            pytest-cov
+            pytest-cov \
+            pre-commit \
+            yamllint
+
+      - name: Lint YAML files
+        run: pre-commit run yamllint --all-files
 
       - name: Run tests with coverage gate
         run: |
@@ -63,21 +69,21 @@ jobs:
           set -e
           EXISTING=$(gh pr list --base main --head dev --state open --json number --jq 'length')
           if [ "$EXISTING" -eq 0 ]; then
+            {
+              echo "Automated PR: all tests passed with >=90% coverage."
+              echo ""
+              echo "**Triggered by:** push to \`dev\`"
+              echo "**Status:** tests passed, coverage gate met"
+              echo ""
+              echo "Generated with Claude Code"
+            } > /tmp/pr_body.txt
             gh pr create \
               --base main \
               --head dev \
-              --title "dev → main: automated merge (tests passed)" \
-              --body "$(cat <<'EOF'
-Automated PR created by CI after all tests passed with ≥90% coverage.
-
-**Triggered by:** push to \`dev\`
-**Status:** tests passed, coverage gate met
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
+              --title "dev -> main: automated merge (tests passed)" \
+              --body-file /tmp/pr_body.txt
           else
-            echo "PR already exists — skipping create"
+            echo "PR already exists -- skipping create"
           fi
 
       - name: Enable auto-merge on PR
