@@ -264,15 +264,23 @@ def click_page_button(page, label):
 
 
 def fill_and_confirm_modal(page, comment, confirm_label):
-    """Fill the Comments textarea in the open modal and click the confirm button."""
+    """Fill the Comments textarea in the open modal and click the confirm button.
+
+    Textarea: matched by class slds-textarea (no name/id, dynamic id).
+    Confirm button: matched by title attribute, which is unique and stable:
+        "Approve Skill or Certification Rating" / "Reject Skill or Certification Rating"
+    """
     modal = page.locator("[role='dialog']").first
     modal.wait_for(state="visible", timeout=15_000)
 
-    textarea = modal.get_by_label("Comments")
+    # slds-textarea is the only static identifier on this element (no name, dynamic id)
+    textarea = modal.locator("textarea.slds-textarea")
     textarea.wait_for(state="visible", timeout=10_000)
     textarea.fill(comment)
 
-    modal.get_by_role("button", name=confirm_label).click()
+    # title is stable and unique; guards against colliding with same-text header buttons
+    title = f"{confirm_label} Skill or Certification Rating"
+    page.locator(f"button[title='{title}']").click()
 
     page.locator("[role='dialog']").first.wait_for(state="hidden", timeout=30_000)
     page.wait_for_timeout(1_500)
