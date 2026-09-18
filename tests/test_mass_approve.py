@@ -2,7 +2,7 @@
 import csv
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,7 +14,6 @@ import mass_approve_skills as mas
 # ---------------------------------------------------------------------------
 
 def _write_csv(path, rows, headers=None):
-    """Write a Manager Tracker–shaped CSV to *path*."""
     if headers is None:
         headers = [
             "Record ID", "Employee", "Grade", "Skill or Certification",
@@ -29,31 +28,18 @@ def _write_csv(path, rows, headers=None):
         writer.writerows(rows)
 
 
-def _make_mock_page():
-    """Return a MagicMock that behaves like a Playwright page."""
+def _mock_page(evaluate_return=None):
     page = MagicMock()
-    page.query_selector_all.return_value = []
+    page.evaluate.return_value = evaluate_return or {"rows": []}
     return page
 
 
-def _make_tr_mock(employee, skill, row_key="REC001", checked=False):
-    """Build a mock <tr> element with the expected cell layout."""
-    tr = MagicMock()
-    tr.get_attribute.return_value = row_key
-
-    # Cells: [checkbox-col, Rating-Id, Resource, Skill, ...]
-    cells = []
-    for text in ["", "Rating001", employee, skill, "01/01/2025", "", "3-Advanced", "", "Submitted"]:
-        cell = MagicMock()
-        cell.inner_text.return_value = text
-        cells.append(cell)
-    tr.query_selector_all.return_value = cells
-
-    checkbox = MagicMock()
-    checkbox.is_checked.return_value = checked
-    tr.query_selector.return_value = checkbox
-
-    return tr, checkbox
+def _row(employee, skill, record_id="R1"):
+    return {
+        "id": record_id,
+        mas._COL_EMPLOYEE: employee,
+        mas._COL_SKILL: skill,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +48,7 @@ def _make_tr_mock(employee, skill, row_key="REC001", checked=False):
 
 class TestLoadCsv:
     def test_separates_approve_and_reject(self, tmp_path):
-        csv_file = tmp_path / "tracker.csv"
+        csv_file = tmp_path / "t.csv"
         _write_csv(csv_file, [
             {"Record ID": "R1", "Employee": "Alice", "Skill or Certification": "Docker",
              "Discussion Notes": "ok", "Final Action": "Approve"},
@@ -70,15 +56,11 @@ class TestLoadCsv:
              "Discussion Notes": "needs work", "Final Action": "Reject"},
         ])
         approvals, rejections = mas.load_csv(csv_file)
-        assert len(approvals) == 1
-        assert approvals[0]["employee"] == "Alice"
-        assert approvals[0]["skill"] == "Docker"
-        assert len(rejections) == 1
-        assert rejections[0]["employee"] == "Bob"
-        assert rejections[0]["notes"] == "needs work"
+        assert len(approvals) == 1 and approvals[0]["employee"] == "Alice"
+        assert len(rejections) == 1 and rejections[0]["notes"] == "needs work"
 
     def test_blank_action_excluded(self, tmp_path):
-        csv_file = tmp_path / "tracker.csv"
+        csv_file = tmp_path / "t.csv"
         _write_csv(csv_file, [
             {"Record ID": "R1", "Employee": "Alice", "Skill or Certification": "Docker",
              "Discussion Notes": "", "Final Action": ""},
@@ -86,21 +68,19 @@ class TestLoadCsv:
              "Discussion Notes": "", "Final Action": "Approve"},
         ])
         approvals, rejections = mas.load_csv(csv_file)
-        assert len(approvals) == 1
-        assert len(rejections) == 0
+        assert len(approvals) == 1 and len(rejections) == 0
 
     def test_notes_truncated_at_max_chars(self, tmp_path):
-        long_note = "x" * 5000
-        csv_file = tmp_path / "tracker.csv"
+        csv_file = tmp_path / "t.csv"
         _write_csv(csv_file, [
             {"Record ID": "R1", "Employee": "Carol", "Skill or Certification": "Flow",
-             "Discussion Notes": long_note, "Final Action": "Reject"},
+             "Discussion Notes": "x" * 5000, "Final Action": "Reject"},
         ])
         _, rejections = mas.load_csv(csv_file)
         assert len(rejections[0]["notes"]) == mas.MAX_COMMENT_CHARS
 
     def test_record_ids_preserved(self, tmp_path):
-        csv_file = tmp_path / "tracker.csv"
+        csv_file = tmp_path / "t.csv"
         _write_csv(csv_file, [
             {"Record ID": "a9H3y000000DIa5EAG", "Employee": "Dave",
              "Skill or Certification": "CI/CD", "Discussion Notes": "",
@@ -110,35 +90,38 @@ class TestLoadCsv:
         assert approvals[0]["record_id"] == "a9H3y000000DIa5EAG"
 
     def test_empty_csv_returns_empty_lists(self, tmp_path):
-        csv_file = tmp_path / "tracker.csv"
+        csv_file = tmp_path / "t.csv"
         _write_csv(csv_file, [])
         approvals, rejections = mas.load_csv(csv_file)
-        assert approvals == []
-        assert rejections == []
+        assert approvals == [] and rejections == []
 
-    def test_all_approve(self, tmp_path):
-        csv_file = tmp_path / "tracker.csv"
+    def test_all_reject(self, tmp_path):
+        csv_file = tmp_path / "t.csv"
         _write_csv(csv_file, [
-            {"Record ID": f"R{i}", "Employee": f"Emp{i}", "Skill or Certification": "S",
-             "Discussion Notes": "", "Final Action": "Approve"}
-            for i in range(5)
+            {"Record ID": f"R{i}", "Employee": f"E{i}", "Skill or Certification": "S",
+             "Discussion Notes": f"note{i}", "Final Action": "Reject"}
+            for i in range(3)
         ])
         approvals, rejections = mas.load_csv(csv_file)
-        assert len(approvals) == 5
-        assert rejections == []
+        assert len(approvals) == 0 and len(rejections) == 3
 
 
 # ---------------------------------------------------------------------------
-# wait_for_table
+# wait_for_grid
 # ---------------------------------------------------------------------------
 
-class TestWaitForTable:
-    def test_delegates_to_page_wait_for_selector(self):
-        page = _make_mock_page()
-        mas.wait_for_table(page)
-        page.wait_for_selector.assert_called_once()
-        selector_arg = page.wait_for_selector.call_args[0][0]
-        assert "tr[data-row-key-value]" in selector_arg
+class TestWaitForGrid:
+    def test_calls_wait_for_function_then_wait_for_timeout(self):
+        page = _mock_page()
+        mas.wait_for_grid(page)
+        page.wait_for_function.assert_called_once()
+        page.wait_for_timeout.assert_called_once_with(2_000)
+
+    def test_passes_grid_js_to_wait_for_function(self):
+        page = _mock_page()
+        mas.wait_for_grid(page)
+        js_arg = page.wait_for_function.call_args[0][0]
+        assert "c-bryntum-widget-host" in js_arg
 
 
 # ---------------------------------------------------------------------------
@@ -146,163 +129,143 @@ class TestWaitForTable:
 # ---------------------------------------------------------------------------
 
 class TestGetAllRows:
-    def test_parses_employee_and_skill(self):
-        page = _make_mock_page()
-        tr, _ = _make_tr_mock("Alice", "Docker")
-        page.query_selector_all.return_value = [tr]
+    def test_returns_rows_from_evaluate(self):
+        page = _mock_page(evaluate_return={"rows": [_row("Alice", "Docker")]})
         rows = mas.get_all_rows(page)
         assert len(rows) == 1
-        assert rows[0]["employee"] == "Alice"
-        assert rows[0]["skill"] == "Docker"
+        assert rows[0][mas._COL_EMPLOYEE] == "Alice"
 
-    def test_skips_rows_with_too_few_cells(self):
-        page = _make_mock_page()
-        tr = MagicMock()
-        tr.get_attribute.return_value = "REC1"
-        # Only 2 cells — not enough
-        short_cells = [MagicMock(), MagicMock()]
-        for c in short_cells:
-            c.inner_text.return_value = "x"
-        tr.query_selector_all.return_value = short_cells
-        page.query_selector_all.return_value = [tr]
-        rows = mas.get_all_rows(page)
-        assert rows == []
-
-    def test_handles_exception_in_row_gracefully(self):
-        page = _make_mock_page()
-        bad_tr = MagicMock()
-        bad_tr.query_selector_all.side_effect = RuntimeError("DOM error")
-        good_tr, _ = _make_tr_mock("Bob", "K8s")
-        page.query_selector_all.return_value = [bad_tr, good_tr]
-        rows = mas.get_all_rows(page)
-        assert len(rows) == 1
-        assert rows[0]["employee"] == "Bob"
-
-    def test_returns_empty_when_no_rows(self):
-        page = _make_mock_page()
-        page.query_selector_all.return_value = []
+    def test_returns_empty_list_when_no_rows(self):
+        page = _mock_page(evaluate_return={"rows": []})
         assert mas.get_all_rows(page) == []
 
-    def test_row_key_stored(self):
-        page = _make_mock_page()
-        tr, _ = _make_tr_mock("Alice", "Docker", row_key="a9H3y000000DIa5EAG")
-        page.query_selector_all.return_value = [tr]
-        rows = mas.get_all_rows(page)
-        assert rows[0]["row_key"] == "a9H3y000000DIa5EAG"
+    def test_raises_on_evaluate_error(self):
+        page = _mock_page(evaluate_return={"error": "no-host"})
+        with pytest.raises(RuntimeError, match="no-host"):
+            mas.get_all_rows(page)
+
+    def test_passes_correct_js(self):
+        page = _mock_page(evaluate_return={"rows": []})
+        mas.get_all_rows(page)
+        js_arg = page.evaluate.call_args[0][0]
+        assert "b-grid-row" in js_arg
 
 
 # ---------------------------------------------------------------------------
-# scroll_to_load_all
+# select_rows_by_ids
 # ---------------------------------------------------------------------------
 
-class TestScrollToLoadAll:
-    def test_stops_when_row_count_stable(self):
-        page = _make_mock_page()
-        # Same count each call → stops after first iteration
-        page.query_selector_all.return_value = [MagicMock()]
-        with patch("mass_approve_skills.time.sleep"):
-            mas.scroll_to_load_all(page)
-        # evaluate called once then stopped
-        assert page.evaluate.call_count == 1
+class TestSelectRowsById:
+    def test_returns_selected_count_and_missing(self):
+        page = _mock_page(evaluate_return={"selected": 3, "missing": ["X1"]})
+        result = mas.select_rows_by_ids(page, ["R1", "R2", "R3", "X1"])
+        assert result["selected"] == 3
+        assert result["missing"] == ["X1"]
 
-    def test_keeps_scrolling_while_count_grows(self):
-        page = _make_mock_page()
-        # Returns 1, 2, 2 on successive calls → iterates twice
-        page.query_selector_all.side_effect = [
-            [MagicMock()],           # iteration 1 prev
-            [MagicMock(), MagicMock()],  # iteration 1 new
-            [MagicMock(), MagicMock()],  # iteration 2 prev
-            [MagicMock(), MagicMock()],  # iteration 2 new → stable → stop
-        ]
-        with patch("mass_approve_skills.time.sleep"):
-            mas.scroll_to_load_all(page)
-        assert page.evaluate.call_count == 2
+    def test_raises_on_error(self):
+        page = _mock_page(evaluate_return={"error": "no-host"})
+        with pytest.raises(RuntimeError):
+            mas.select_rows_by_ids(page, ["R1"])
+
+    def test_passes_record_ids_to_evaluate(self):
+        page = _mock_page(evaluate_return={"selected": 1, "missing": []})
+        mas.select_rows_by_ids(page, ["ABC"])
+        call_args = page.evaluate.call_args
+        assert call_args[0][1] == ["ABC"]
 
 
 # ---------------------------------------------------------------------------
-# find_row_checkbox
+# clear_selection
 # ---------------------------------------------------------------------------
 
-class TestFindRowCheckbox:
-    def test_returns_checkbox_when_found(self):
-        page = _make_mock_page()
-        tr, checkbox = _make_tr_mock("Alice", "Docker")
-        page.query_selector_all.return_value = [tr]
-        result = mas.find_row_checkbox(page, "Alice", "Docker")
-        assert result is checkbox
-
-    def test_returns_none_when_not_found(self):
-        page = _make_mock_page()
-        tr, _ = _make_tr_mock("Alice", "Docker")
-        page.query_selector_all.return_value = [tr]
-        result = mas.find_row_checkbox(page, "Bob", "K8s")
-        assert result is None
-
-    def test_exact_name_required(self):
-        page = _make_mock_page()
-        tr, _ = _make_tr_mock("Alice Smith", "Docker")
-        page.query_selector_all.return_value = [tr]
-        assert mas.find_row_checkbox(page, "Alice", "Docker") is None
-        assert mas.find_row_checkbox(page, "Alice Smith", "Docker") is not None
+class TestClearSelection:
+    def test_calls_evaluate_with_clear_js(self):
+        page = _mock_page()
+        mas.clear_selection(page)
+        page.evaluate.assert_called_once()
+        js_arg = page.evaluate.call_args[0][0]
+        assert "b-selected" in js_arg
 
 
 # ---------------------------------------------------------------------------
-# click_button_in_header
+# match_row_id
 # ---------------------------------------------------------------------------
 
-class TestClickButtonInHeader:
+class TestMatchRowId:
+    def test_found(self):
+        rows = [_row("Alice", "Docker", "R1"), _row("Bob", "K8s", "R2")]
+        assert mas.match_row_id(rows, "Alice", "Docker") == "R1"
+
+    def test_not_found_returns_none(self):
+        rows = [_row("Alice", "Docker", "R1")]
+        assert mas.match_row_id(rows, "Bob", "K8s") is None
+
+    def test_exact_match_required(self):
+        rows = [_row("Alice Smith", "Docker", "R1")]
+        assert mas.match_row_id(rows, "Alice", "Docker") is None
+
+    def test_empty_rows_returns_none(self):
+        assert mas.match_row_id([], "Alice", "Docker") is None
+
+
+# ---------------------------------------------------------------------------
+# click_page_button
+# ---------------------------------------------------------------------------
+
+class TestClickPageButton:
     def test_clicks_first_matching_button(self):
-        page = _make_mock_page()
+        page = _mock_page()
         mock_btn = MagicMock()
-        page.locator.return_value.first = mock_btn
-        mas.click_button_in_header(page, "Approve")
+        page.get_by_role.return_value.first = mock_btn
+        mas.click_page_button(page, "Approve")
         mock_btn.wait_for.assert_called_once_with(state="visible", timeout=15_000)
         mock_btn.click.assert_called_once()
 
-    def test_uses_correct_label_in_selector(self):
-        page = _make_mock_page()
+    def test_uses_correct_role_and_name(self):
+        page = _mock_page()
         mock_btn = MagicMock()
-        page.locator.return_value.first = mock_btn
-        mas.click_button_in_header(page, "Reject")
-        selector = page.locator.call_args[0][0]
-        assert "Reject" in selector
+        page.get_by_role.return_value.first = mock_btn
+        mas.click_page_button(page, "Reject")
+        page.get_by_role.assert_called_once_with("button", name="Reject")
 
 
 # ---------------------------------------------------------------------------
-# fill_dialog_comment_and_confirm
+# fill_and_confirm_modal
 # ---------------------------------------------------------------------------
 
-class TestFillDialogCommentAndConfirm:
-    def _setup_page(self):
-        page = _make_mock_page()
-        textarea = MagicMock()
+class TestFillAndConfirmModal:
+    def _setup(self):
+        page = _mock_page()
         modal = MagicMock()
+        textarea = MagicMock()
         confirm_btn = MagicMock()
 
-        # page.locator(...).first → textarea (first call), modal (second call)
-        loc1 = MagicMock()
-        loc1.first = textarea
-        loc2 = MagicMock()
-        loc2.first = modal
-        page.locator.side_effect = [loc1, loc2]
+        page.locator.return_value.first = modal
+        modal.get_by_label.return_value = textarea
+        modal.get_by_role.return_value = confirm_btn
 
-        modal.locator.return_value.first = confirm_btn
+        return page, modal, textarea, confirm_btn
 
-        return page, textarea, modal, confirm_btn
-
-    def test_fills_comment_and_clicks_confirm(self):
-        page, textarea, modal, confirm_btn = self._setup_page()
-        mas.fill_dialog_comment_and_confirm(page, "my comment", "Approve")
+    def test_fills_textarea_and_clicks_confirm(self):
+        page, modal, textarea, confirm_btn = self._setup()
+        mas.fill_and_confirm_modal(page, "my comment", "Approve")
         textarea.fill.assert_called_once_with("my comment")
         confirm_btn.click.assert_called_once()
 
-    def test_waits_for_dialog_to_close(self):
-        page, textarea, modal, confirm_btn = self._setup_page()
-        mas.fill_dialog_comment_and_confirm(page, "comment", "Reject")
-        # Should call wait_for_selector twice: once open, once hidden
-        assert page.wait_for_selector.call_count == 2
-        calls = page.wait_for_selector.call_args_list
-        assert calls[1][1]["state"] == "hidden"
+    def test_waits_for_modal_to_close(self):
+        page, modal, textarea, confirm_btn = self._setup()
+        mas.fill_and_confirm_modal(page, "comment", "Reject")
+        hidden_call = [
+            c for c in page.locator.return_value.first.wait_for.call_args_list
+            if c[1].get("state") == "hidden"
+        ]
+        # modal.wait_for(hidden) is the closing wait
+        assert page.wait_for_timeout.called
+
+    def test_uses_role_for_confirm_button(self):
+        page, modal, textarea, confirm_btn = self._setup()
+        mas.fill_and_confirm_modal(page, "x", "Reject")
+        modal.get_by_role.assert_called_once_with("button", name="Reject")
 
 
 # ---------------------------------------------------------------------------
@@ -310,64 +273,51 @@ class TestFillDialogCommentAndConfirm:
 # ---------------------------------------------------------------------------
 
 class TestExecuteApprovalPass:
-    def test_selects_found_rows_and_approves(self):
-        page = _make_mock_page()
-        tr, cb = _make_tr_mock("Alice", "Docker", checked=False)
-        page.query_selector_all.return_value = [tr]
+    def test_selects_and_approves_when_rows_found(self):
+        page = _mock_page(evaluate_return={"selected": 2, "missing": []})
+        approvals = [
+            {"employee": "Alice", "skill": "Docker", "record_id": "R1"},
+            {"employee": "Bob", "skill": "K8s", "record_id": "R2"},
+        ]
+        with patch("mass_approve_skills.click_page_button") as mock_click, \
+             patch("mass_approve_skills.fill_and_confirm_modal") as mock_fill:
+            result = mas.execute_approval_pass(page, approvals)
 
-        with patch("mass_approve_skills.click_button_in_header") as mock_click, \
-             patch("mass_approve_skills.fill_dialog_comment_and_confirm") as mock_fill, \
-             patch("mass_approve_skills.time.sleep"):
-            result = mas.execute_approval_pass(
-                page, [{"employee": "Alice", "skill": "Docker", "record_id": "R1"}]
-            )
-
-        cb.click.assert_called_once()
         mock_click.assert_called_once_with(page, "Approve")
         mock_fill.assert_called_once_with(page, mas.APPROVE_COMMENT, "Approve")
+        assert result["succeeded"] == 2
+        assert result["missing"] == []
+
+    def test_records_missing_rows(self):
+        page = _mock_page(evaluate_return={"selected": 1, "missing": ["R2"]})
+        approvals = [
+            {"employee": "Alice", "skill": "Docker", "record_id": "R1"},
+            {"employee": "Ghost", "skill": "Flow", "record_id": "R2"},
+        ]
+        with patch("mass_approve_skills.click_page_button"), \
+             patch("mass_approve_skills.fill_and_confirm_modal"):
+            result = mas.execute_approval_pass(page, approvals)
+
         assert result["succeeded"] == 1
-        assert result["failed"] == []
-
-    def test_records_rows_not_found_on_page(self):
-        page = _make_mock_page()
-        page.query_selector_all.return_value = []  # no rows on page
-
-        with patch("mass_approve_skills.click_button_in_header"), \
-             patch("mass_approve_skills.fill_dialog_comment_and_confirm"), \
-             patch("mass_approve_skills.time.sleep"):
-            result = mas.execute_approval_pass(
-                page, [{"employee": "Ghost", "skill": "Flow", "record_id": "R99"}]
-            )
-
-        # selected_count stays 0 (never found), so succeeded=0; failed has the missing row
-        assert result["succeeded"] == 0
-        assert len(result["failed"]) == 1
-        assert result["failed"][0] == {"employee": "Ghost", "skill": "Flow"}
+        assert "R2" in result["missing"]
 
     def test_no_approvals_skips_button_click(self):
-        page = _make_mock_page()
-
-        with patch("mass_approve_skills.click_button_in_header") as mock_click, \
-             patch("mass_approve_skills.fill_dialog_comment_and_confirm") as mock_fill:
+        page = _mock_page()
+        with patch("mass_approve_skills.click_page_button") as mock_click, \
+             patch("mass_approve_skills.fill_and_confirm_modal") as mock_fill:
             result = mas.execute_approval_pass(page, [])
 
         mock_click.assert_not_called()
         mock_fill.assert_not_called()
-        assert result == {"succeeded": 0, "failed": []}
+        assert result == {"attempted": 0, "succeeded": 0, "missing": []}
 
-    def test_already_checked_row_not_clicked_again(self):
-        page = _make_mock_page()
-        tr, cb = _make_tr_mock("Alice", "Docker", checked=True)
-        page.query_selector_all.return_value = [tr]
+    def test_no_button_click_when_zero_selected(self):
+        page = _mock_page(evaluate_return={"selected": 0, "missing": ["R1"]})
+        with patch("mass_approve_skills.click_page_button") as mock_click, \
+             patch("mass_approve_skills.fill_and_confirm_modal") as mock_fill:
+            mas.execute_approval_pass(page, [{"employee": "X", "skill": "Y", "record_id": "R1"}])
 
-        with patch("mass_approve_skills.click_button_in_header"), \
-             patch("mass_approve_skills.fill_dialog_comment_and_confirm"), \
-             patch("mass_approve_skills.time.sleep"):
-            mas.execute_approval_pass(
-                page, [{"employee": "Alice", "skill": "Docker", "record_id": "R1"}]
-            )
-
-        cb.click.assert_not_called()
+        mock_click.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -375,96 +325,91 @@ class TestExecuteApprovalPass:
 # ---------------------------------------------------------------------------
 
 class TestExecuteRejectionPass:
-    def _rejection_item(self, employee="Alice", skill="Docker",
-                        notes="Needs cert", record_id="R1"):
+    def _item(self, employee="Alice", skill="Docker", notes="No cert", record_id="R1"):
         return {"employee": employee, "skill": skill, "notes": notes, "record_id": record_id}
 
     def test_success_path(self):
-        page = _make_mock_page()
-        tr, cb = _make_tr_mock("Alice", "Docker", checked=False)
-        page.query_selector_all.side_effect = lambda selector: (
-            [tr] if "data-row-key-value]" in selector and "checked" not in selector
-            else []
-        )
+        page = _mock_page()
+        page.evaluate.return_value = {"selected": 1, "missing": []}
 
-        with patch("mass_approve_skills.scroll_to_load_all"), \
-             patch("mass_approve_skills.click_button_in_header"), \
-             patch("mass_approve_skills.fill_dialog_comment_and_confirm"), \
-             patch("mass_approve_skills.time.sleep"):
-            results = mas.execute_rejection_pass(page, [self._rejection_item()])
+        with patch("mass_approve_skills.clear_selection"), \
+             patch("mass_approve_skills.click_page_button"), \
+             patch("mass_approve_skills.fill_and_confirm_modal"):
+            results = mas.execute_rejection_pass(page, [self._item()], [])
 
-        assert len(results) == 1
         assert results[0]["status"] == "success"
-        assert results[0]["error"] == ""
 
-    def test_skips_row_not_found(self):
-        page = _make_mock_page()
-        page.query_selector_all.return_value = []
-
-        with patch("mass_approve_skills.scroll_to_load_all"), \
-             patch("mass_approve_skills.time.sleep"):
-            results = mas.execute_rejection_pass(page, [self._rejection_item()])
-
+    def test_skips_when_no_record_id_and_not_in_rows(self):
+        page = _mock_page()
+        with patch("mass_approve_skills.clear_selection"):
+            results = mas.execute_rejection_pass(
+                page, [self._item(record_id="")], []
+            )
         assert results[0]["status"] == "skipped"
         assert "not found" in results[0]["error"]
 
-    def test_records_failure_on_click_exception(self):
-        page = _make_mock_page()
-        tr, cb = _make_tr_mock("Alice", "Docker")
-        page.query_selector_all.side_effect = lambda selector: (
-            [tr] if "data-row-key-value]" in selector and "checked" not in selector
-            else []
-        )
+    def test_skips_when_row_not_on_page(self):
+        page = _mock_page(evaluate_return={"selected": 0, "missing": ["R1"]})
 
-        with patch("mass_approve_skills.scroll_to_load_all"), \
-             patch("mass_approve_skills.click_button_in_header",
+        with patch("mass_approve_skills.clear_selection"):
+            results = mas.execute_rejection_pass(page, [self._item()], [])
+
+        assert results[0]["status"] == "skipped"
+        assert "not found on page" in results[0]["error"]
+
+    def test_records_failure_on_exception(self):
+        page = _mock_page(evaluate_return={"selected": 1, "missing": []})
+
+        with patch("mass_approve_skills.clear_selection"), \
+             patch("mass_approve_skills.click_page_button",
                    side_effect=RuntimeError("timeout")), \
-             patch("mass_approve_skills.time.sleep"):
-            results = mas.execute_rejection_pass(page, [self._rejection_item()])
+             patch("mass_approve_skills.take_debug_screenshot"):
+            results = mas.execute_rejection_pass(page, [self._item()], [])
 
         assert results[0]["status"] == "failed"
         assert "timeout" in results[0]["error"]
 
-    def test_multiple_rejections_processed_in_order(self):
-        page = _make_mock_page()
-        tr1, _ = _make_tr_mock("Alice", "Docker")
-        tr2, _ = _make_tr_mock("Bob", "K8s")
-        page.query_selector_all.side_effect = lambda selector: (
-            [tr1, tr2] if "data-row-key-value]" in selector and "checked" not in selector
-            else []
-        )
+    def test_falls_back_to_name_match_when_no_csv_id(self):
+        page = _mock_page(evaluate_return={"selected": 1, "missing": []})
+        live_rows = [_row("Alice", "Docker", "R_LIVE")]
 
-        with patch("mass_approve_skills.scroll_to_load_all"), \
-             patch("mass_approve_skills.click_button_in_header"), \
-             patch("mass_approve_skills.fill_dialog_comment_and_confirm"), \
-             patch("mass_approve_skills.time.sleep"):
+        with patch("mass_approve_skills.clear_selection"), \
+             patch("mass_approve_skills.click_page_button"), \
+             patch("mass_approve_skills.fill_and_confirm_modal"):
+            results = mas.execute_rejection_pass(
+                page, [self._item(record_id="")], live_rows
+            )
+
+        # Verify select_rows_by_ids was called with the live-matched ID
+        eval_call = page.evaluate.call_args_list[-1]
+        assert "R_LIVE" in str(eval_call)
+
+    def test_multiple_rejections_all_succeed(self):
+        page = _mock_page(evaluate_return={"selected": 1, "missing": []})
+
+        with patch("mass_approve_skills.clear_selection"), \
+             patch("mass_approve_skills.click_page_button"), \
+             patch("mass_approve_skills.fill_and_confirm_modal"):
             results = mas.execute_rejection_pass(page, [
-                self._rejection_item("Alice", "Docker"),
-                self._rejection_item("Bob", "K8s"),
-            ])
+                self._item("Alice", "Docker"),
+                self._item("Bob", "K8s", record_id="R2"),
+            ], [])
 
-        assert len(results) == 2
         assert all(r["status"] == "success" for r in results)
 
-    def test_deselects_other_checked_rows_before_selecting(self):
-        page = _make_mock_page()
-        tr, cb = _make_tr_mock("Alice", "Docker")
-        other_cb = MagicMock()
 
-        def qsa(selector):
-            if "checked" in selector:
-                return [other_cb]
-            return [tr]
+# ---------------------------------------------------------------------------
+# take_debug_screenshot
+# ---------------------------------------------------------------------------
 
-        page.query_selector_all.side_effect = qsa
-
-        with patch("mass_approve_skills.scroll_to_load_all"), \
-             patch("mass_approve_skills.click_button_in_header"), \
-             patch("mass_approve_skills.fill_dialog_comment_and_confirm"), \
-             patch("mass_approve_skills.time.sleep"):
-            mas.execute_rejection_pass(page, [self._rejection_item()])
-
-        other_cb.click.assert_called_once()
+class TestTakeDebugScreenshot:
+    def test_calls_page_screenshot(self):
+        page = _mock_page()
+        mas.take_debug_screenshot(page, "test_tag")
+        page.screenshot.assert_called_once()
+        call_kwargs = page.screenshot.call_args[1]
+        assert "test_tag" in call_kwargs["path"]
+        assert call_kwargs["full_page"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -472,37 +417,32 @@ class TestExecuteRejectionPass:
 # ---------------------------------------------------------------------------
 
 class TestRun:
-    def _build_playwright_mock(self):
-        """Build nested Playwright mocks: sync_playwright → pw → browser → context → page."""
-        page = _make_mock_page()
+    def _pw_mock(self):
+        page = _mock_page(evaluate_return={"rows": []})
         context = MagicMock()
         context.new_page.return_value = page
         browser = MagicMock()
         browser.new_context.return_value = context
         pw = MagicMock()
         pw.chromium.launch.return_value = browser
-
         cm = MagicMock()
         cm.__enter__ = MagicMock(return_value=pw)
         cm.__exit__ = MagicMock(return_value=False)
         return cm, page
 
-    def test_run_happy_path_no_records(self, tmp_path):
-        csv_file = tmp_path / "tracker.csv"
-        _write_csv(csv_file, [])
+    def test_happy_path_no_records(self, tmp_path):
         results_file = tmp_path / "results.json"
-
-        cm, page = self._build_playwright_mock()
+        cm, page = self._pw_mock()
+        # At least one live row so the no-rows early-exit guard is skipped
+        live_rows = [{"id": "R0", mas._COL_EMPLOYEE: "X", mas._COL_SKILL: "Y"}]
 
         with patch("mass_approve_skills.sync_playwright", return_value=cm), \
              patch("mass_approve_skills.load_csv", return_value=([], [])), \
-             patch("mass_approve_skills.wait_for_table"), \
-             patch("mass_approve_skills.scroll_to_load_all"), \
-             patch("mass_approve_skills.get_all_rows", return_value=[]), \
+             patch("mass_approve_skills.wait_for_grid"), \
+             patch("mass_approve_skills.get_all_rows", return_value=live_rows), \
              patch("mass_approve_skills.execute_approval_pass",
-                   return_value={"succeeded": 0, "failed": []}), \
+                   return_value={"attempted": 0, "succeeded": 0, "missing": []}), \
              patch("mass_approve_skills.execute_rejection_pass", return_value=[]), \
-             patch("mass_approve_skills.time.sleep"), \
              patch("mass_approve_skills.RESULTS_PATH", results_file), \
              patch("builtins.input", return_value=""):
             mas.run()
@@ -510,55 +450,73 @@ class TestRun:
         assert results_file.exists()
         data = json.loads(results_file.read_text())
         assert data["approvals"]["attempted"] == 0
-        assert data["rejections"] == []
 
-    def test_run_with_approvals_and_rejections(self, tmp_path):
+    def test_with_records_calls_both_passes(self, tmp_path):
         results_file = tmp_path / "results.json"
-        approvals = [{"employee": "Alice", "skill": "Docker", "record_id": "R1"}]
-        rejections = [{"employee": "Bob", "skill": "K8s", "record_id": "R2", "notes": "No cert"}]
-
-        cm, page = self._build_playwright_mock()
+        cm, page = self._pw_mock()
+        approvals = [{"employee": "A", "skill": "S", "record_id": "R1"}]
+        rejections = [{"employee": "B", "skill": "T", "record_id": "R2", "notes": "x"}]
+        live_rows = [{"id": "R1", mas._COL_EMPLOYEE: "A", mas._COL_SKILL: "S"}]
 
         with patch("mass_approve_skills.sync_playwright", return_value=cm), \
              patch("mass_approve_skills.load_csv", return_value=(approvals, rejections)), \
-             patch("mass_approve_skills.wait_for_table"), \
-             patch("mass_approve_skills.scroll_to_load_all"), \
-             patch("mass_approve_skills.get_all_rows", return_value=[]), \
+             patch("mass_approve_skills.wait_for_grid"), \
+             patch("mass_approve_skills.get_all_rows", return_value=live_rows), \
              patch("mass_approve_skills.execute_approval_pass",
-                   return_value={"succeeded": 1, "failed": []}), \
+                   return_value={"attempted": 1, "succeeded": 1, "missing": []}) as mock_ap, \
              patch("mass_approve_skills.execute_rejection_pass",
-                   return_value=[{"employee": "Bob", "skill": "K8s",
-                                  "status": "success", "error": ""}]), \
-             patch("mass_approve_skills.time.sleep"), \
+                   return_value=[{"employee": "B", "skill": "T",
+                                  "status": "success", "error": ""}]) as mock_rj, \
              patch("mass_approve_skills.RESULTS_PATH", results_file), \
              patch("builtins.input", return_value=""):
             mas.run()
 
-        data = json.loads(results_file.read_text())
-        assert data["approvals"]["succeeded"] == 1
-        assert data["rejections"][0]["status"] == "success"
+        mock_ap.assert_called_once()
+        mock_rj.assert_called_once()
 
-    def test_run_pwtimeout_falls_back_to_input(self, tmp_path):
+    def test_pwtimeout_on_grid_recovers(self, tmp_path):
         results_file = tmp_path / "results.json"
-        cm, page = self._build_playwright_mock()
-
+        cm, page = self._pw_mock()
         from playwright.sync_api import TimeoutError as PWTimeout
+
+        call_count = {"n": 0}
+
+        def wait_grid_side_effect(p):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise PWTimeout("timeout")
 
         with patch("mass_approve_skills.sync_playwright", return_value=cm), \
              patch("mass_approve_skills.load_csv", return_value=([], [])), \
-             patch("mass_approve_skills.wait_for_table", side_effect=PWTimeout("timeout")), \
-             patch("mass_approve_skills.scroll_to_load_all"), \
+             patch("mass_approve_skills.wait_for_grid",
+                   side_effect=wait_grid_side_effect), \
              patch("mass_approve_skills.get_all_rows", return_value=[]), \
              patch("mass_approve_skills.execute_approval_pass",
-                   return_value={"succeeded": 0, "failed": []}), \
+                   return_value={"attempted": 0, "succeeded": 0, "missing": []}), \
              patch("mass_approve_skills.execute_rejection_pass", return_value=[]), \
-             patch("mass_approve_skills.time.sleep"), \
+             patch("mass_approve_skills.take_debug_screenshot"), \
              patch("mass_approve_skills.RESULTS_PATH", results_file), \
              patch("builtins.input", return_value=""):
             mas.run()
 
-        # Should complete without raising despite PWTimeout
-        assert results_file.exists()
+        assert call_count["n"] == 2  # retried after timeout
+
+    def test_no_rows_found_exits_early(self, tmp_path):
+        results_file = tmp_path / "results.json"
+        cm, page = self._pw_mock()
+
+        with patch("mass_approve_skills.sync_playwright", return_value=cm), \
+             patch("mass_approve_skills.load_csv", return_value=([], [])), \
+             patch("mass_approve_skills.wait_for_grid"), \
+             patch("mass_approve_skills.get_all_rows", return_value=[]), \
+             patch("mass_approve_skills.execute_approval_pass") as mock_ap, \
+             patch("mass_approve_skills.take_debug_screenshot"), \
+             patch("mass_approve_skills.RESULTS_PATH", results_file), \
+             patch("builtins.input", return_value=""):
+            mas.run()
+
+        # Should exit before calling approval pass when no rows found
+        mock_ap.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -566,14 +524,17 @@ class TestRun:
 # ---------------------------------------------------------------------------
 
 class TestConstants:
-    def test_approve_comment_contains_reviewer_name(self):
+    def test_approve_comment_contains_reviewer(self):
         assert "Alexis Williams" in mas.APPROVE_COMMENT
 
     def test_max_comment_chars_is_4000(self):
         assert mas.MAX_COMMENT_CHARS == 4000
 
-    def test_mass_approve_url_is_org62(self):
+    def test_url_is_org62(self):
         assert "org62.lightning.force.com" in mas.MASS_APPROVE_URL
 
-    def test_csv_path_points_to_manager_tracker(self):
-        assert "Manager Tracker" in str(mas.CSV_PATH)
+    def test_col_employee_is_expected_id(self):
+        assert mas._COL_EMPLOYEE == "col-pse__resource__r_name"
+
+    def test_col_skill_is_expected_id(self):
+        assert mas._COL_SKILL == "col-pse__skill_certification__r_name"

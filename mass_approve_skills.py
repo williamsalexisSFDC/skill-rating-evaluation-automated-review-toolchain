@@ -4,6 +4,9 @@ Mass Approve/Reject Skill and Certification Ratings via Playwright
 Reads the Manager Tracker CSV export, then drives the Salesforce
 Mass Approve Skills and Certification page in org62.
 
+The page uses a Bryntum grid inside Shadow DOM — all grid interaction
+uses JavaScript evaluation following the same pattern as scrape_skill_ratings.py.
+
 Pass 1 – Approve all rows where Final Action == "Approve" (en masse,
          single comment).
 Pass 2 – Reject rows where Final Action == "Reject" one at a time,
@@ -12,9 +15,7 @@ Pass 2 – Reject rows where Final Action == "Reject" one at a time,
 Run:
     python3 mass_approve_skills.py
 
-The script pauses at org62 login so you can authenticate, then runs
-both passes automatically.  Results are written to:
-    ~/Downloads/mass_approve_results.json
+Results are written to mass_approve_results.json in the same directory.
 """
 
 import csv
@@ -30,12 +31,141 @@ CSV_PATH = (
     / "Downloads"
     / "skill_rating_review.xlsx - Manager Tracker.csv"
 )
-RESULTS_PATH = Path.home() / "Downloads" / "mass_approve_results.json"
+RESULTS_PATH = Path(__file__).parent / "mass_approve_results.json"
+SCREENSHOTS_DIR = Path(__file__).parent
 MASS_APPROVE_URL = (
     "https://org62.lightning.force.com/lightning/n/Mass_Approve_Skills_and_Certification"
 )
 APPROVE_COMMENT = "Reviewed and approved by PL, Alexis Williams."
 MAX_COMMENT_CHARS = 4000
+
+# Column IDs used by the Bryntum grid on the Mass Approve page
+_COL_EMPLOYEE = "col-pse__resource__r_name"
+_COL_SKILL = "col-pse__skill_certification__r_name"
+
+# ---------------------------------------------------------------------------
+# JS constants (shadow-DOM aware)
+# ---------------------------------------------------------------------------
+
+# Traverses shadow roots to locate an element matching `sel`.
+_FIND_EL_FN = """
+function findEl(root, sel) {
+    const found = root.querySelector(sel);
+    if (found) return found;
+    for (const el of root.querySelectorAll('*')) {
+        if (el.shadowRoot) {
+            const r = findEl(el.shadowRoot, sel);
+            if (r) return r;
+        }
+    }
+    return null;
+}
+"""
+
+# Waits for the Bryntum host to appear anywhere in the shadow tree.
+_WAIT_FOR_GRID_JS = (
+    "() => { "
+    + _FIND_EL_FN
+    + " return !!findEl(document, 'c-bryntum-widget-host'); }"
+)
+
+# Collects all visible rows and their cell data from the grid, scrolling to get
+# virtual rows.  Returns [{id, col-pse__resource__r_name, col-pse__skill_certification__r_name, ...}].
+_GET_ALL_ROWS_JS = (
+    "async () => { "
+    + _FIND_EL_FN
+    + """
+    const host = findEl(document, 'c-bryntum-widget-host');
+    if (!host) return { error: 'no-host' };
+    const sr = host.shadowRoot;
+    const scroller = sr.querySelector('.b-grid-body-container');
+    if (!scroller) return { error: 'no-scroller' };
+
+    function collectRows() {
+        return [...sr.querySelectorAll('.b-grid-row')].map(row => {
+            const record = { id: row.dataset.id };
+            for (const cell of row.querySelectorAll('.b-grid-cell')) {
+                const col = cell.dataset.columnId;
+                if (col) record[col] = cell.textContent?.trim() ?? '';
+            }
+            return record;
+        });
+    }
+
+    const seen = new Map();
+    collectRows().forEach(r => { if (r.id) seen.set(r.id, r); });
+
+    const totalHeight = scroller.scrollHeight;
+    const step = Math.max(scroller.clientHeight, 100);
+    let pos = step;
+    while (pos <= totalHeight + step) {
+        scroller.scrollTop = pos;
+        await new Promise(res => setTimeout(res, 400));
+        collectRows().forEach(r => { if (r.id) seen.set(r.id, r); });
+        pos += step;
+    }
+    scroller.scrollTop = 0;
+    return { rows: [...seen.values()] };
+}"""
+)
+
+# Selects (clicks the selection-column cell of) every row whose data-id is in
+# the provided array.  Returns { selected: N, missing: [id, ...] }.
+_SELECT_BY_IDS_JS = (
+    "async (recordIds) => { "
+    + _FIND_EL_FN
+    + """
+    const host = findEl(document, 'c-bryntum-widget-host');
+    if (!host) return { error: 'no-host' };
+    const sr = host.shadowRoot;
+    const scroller = sr.querySelector('.b-grid-body-container');
+    if (!scroller) return { error: 'no-scroller' };
+
+    const toSelect = new Set(recordIds);
+    const selected = new Set();
+
+    function clickVisible() {
+        for (const row of sr.querySelectorAll('.b-grid-row')) {
+            const id = row.dataset.id;
+            if (!toSelect.has(id) || selected.has(id)) continue;
+            const cell = row.querySelector('[data-column-id="ma_selection-column"]');
+            if (cell) { cell.click(); selected.add(id); }
+        }
+    }
+
+    clickVisible();
+
+    const totalHeight = scroller.scrollHeight;
+    const step = Math.max(scroller.clientHeight, 100);
+    let pos = step;
+    while (pos <= totalHeight + step && selected.size < toSelect.size) {
+        scroller.scrollTop = pos;
+        await new Promise(res => setTimeout(res, 300));
+        clickVisible();
+        pos += step;
+    }
+    scroller.scrollTop = 0;
+    return {
+        selected: selected.size,
+        missing: [...toSelect].filter(id => !selected.has(id))
+    };
+}"""
+)
+
+# Clears the current selection by clicking each selected row's selection cell.
+_CLEAR_SELECTION_JS = (
+    "() => { "
+    + _FIND_EL_FN
+    + """
+    const host = findEl(document, 'c-bryntum-widget-host');
+    if (!host) return;
+    const sr = host.shadowRoot;
+    for (const row of sr.querySelectorAll('.b-grid-row.b-selected, .b-grid-row[aria-selected="true"]')) {
+        const cell = row.querySelector('[data-column-id="ma_selection-column"]');
+        if (cell) cell.click();
+    }
+}"""
+)
 
 
 # ---------------------------------------------------------------------------
@@ -77,178 +207,172 @@ def load_csv(path=None):
 
 
 # ---------------------------------------------------------------------------
-# Page interaction helpers
+# Grid helpers
 # ---------------------------------------------------------------------------
 
-def wait_for_table(page):
-    """Wait until the ratings table has at least one data row."""
-    page.wait_for_selector(
-        "tr[data-row-key-value], lightning-datatable table tbody tr",
-        timeout=60_000,
-    )
+def wait_for_grid(page):
+    """Wait until the Bryntum grid host appears anywhere in the shadow tree."""
+    page.wait_for_function(_WAIT_FOR_GRID_JS, timeout=60_000)
+    page.wait_for_timeout(2_000)
 
 
 def get_all_rows(page):
     """
-    Return a list of dicts with keys: tr, employee, skill, row_key.
-
-    Reads all <tr data-row-key-value> elements from the Lightning datatable.
-    Column layout (0-indexed after the checkbox cell):
-        0 – checkbox, 1 – Rating Id, 2 – Resource, 3 – Skill or Certification, …
+    Return all grid rows as a list of dicts keyed by column ID.
+    Scrolls through virtual rows to collect all records.
     """
-    rows = []
-    for tr in page.query_selector_all("tr[data-row-key-value]"):
-        try:
-            cells = tr.query_selector_all("td, th")
-            cell_texts = [c.inner_text().strip() for c in cells]
-            if len(cell_texts) < 4:
-                continue
-            rows.append(
-                {
-                    "tr": tr,
-                    "employee": cell_texts[2],
-                    "skill": cell_texts[3],
-                    "row_key": tr.get_attribute("data-row-key-value") or "",
-                }
-            )
-        except Exception:
-            continue
-    return rows
+    result = page.evaluate(_GET_ALL_ROWS_JS)
+    if isinstance(result, dict) and "error" in result:
+        raise RuntimeError(f"get_all_rows failed: {result['error']}")
+    return result.get("rows", [])
 
 
-def scroll_to_load_all(page):
-    """Scroll the datatable container to trigger lazy-loading until stable."""
-    for _ in range(20):
-        prev_count = len(page.query_selector_all("tr[data-row-key-value]"))
-        page.evaluate(
-            """
-            const tables = document.querySelectorAll(
-                'lightning-datatable, .slds-scrollable_y, [class*="scroll"]'
-            );
-            tables.forEach(t => { t.scrollTop = t.scrollHeight; });
-            window.scrollTo(0, document.body.scrollHeight);
-            """
-        )
-        time.sleep(1)
-        new_count = len(page.query_selector_all("tr[data-row-key-value]"))
-        if new_count == prev_count:
-            break
+def select_rows_by_ids(page, record_ids):
+    """
+    Select grid rows matching the given record IDs.
+    Returns dict: {selected: int, missing: list[str]}.
+    """
+    result = page.evaluate(_SELECT_BY_IDS_JS, list(record_ids))
+    if isinstance(result, dict) and "error" in result:
+        raise RuntimeError(f"select_rows_by_ids failed: {result['error']}")
+    return result
 
 
-def find_row_checkbox(page, employee, skill):
-    """Return the checkbox element for employee+skill, or None if not found."""
-    for row in get_all_rows(page):
-        if row["employee"].strip() == employee and row["skill"].strip() == skill:
-            return row["tr"].query_selector(
-                "input[type='checkbox'], lightning-primitive-cell-checkbox input"
-            )
+def clear_selection(page):
+    """Deselect all currently selected rows."""
+    page.evaluate(_CLEAR_SELECTION_JS)
+
+
+def match_row_id(rows, employee, skill):
+    """Return the record ID for an employee+skill row, or None if not found."""
+    for row in rows:
+        if (row.get(_COL_EMPLOYEE, "").strip() == employee
+                and row.get(_COL_SKILL, "").strip() == skill):
+            return row.get("id")
     return None
 
 
-def click_button_in_header(page, label):
-    """Click the first Approve or Reject button in the page header."""
-    btn = page.locator(
-        f"button:has-text('{label}'), lightning-button button:has-text('{label}')"
-    ).first
+# ---------------------------------------------------------------------------
+# Button / modal helpers
+# ---------------------------------------------------------------------------
+
+def click_page_button(page, label):
+    """Click a top-level Approve or Reject button on the page."""
+    btn = page.get_by_role("button", name=label).first
     btn.wait_for(state="visible", timeout=15_000)
     btn.click()
 
 
-def fill_dialog_comment_and_confirm(page, comment, confirm_button_label):
+def fill_and_confirm_modal(page, comment, confirm_label):
     """Fill the Comments textarea in the open modal and click the confirm button."""
-    page.wait_for_selector(
-        "section[role='dialog'], div[role='dialog']", timeout=15_000
-    )
-    textarea = page.locator("textarea[name='Comments'], textarea").first
+    modal = page.locator("[role='dialog']").first
+    modal.wait_for(state="visible", timeout=15_000)
+
+    textarea = modal.get_by_label("Comments")
     textarea.wait_for(state="visible", timeout=10_000)
     textarea.fill(comment)
-    modal = page.locator("section[role='dialog'], div[role='dialog']").first
-    modal.locator(f"button:has-text('{confirm_button_label}')").first.click()
-    page.wait_for_selector(
-        "section[role='dialog'], div[role='dialog']",
-        state="hidden",
-        timeout=30_000,
-    )
+
+    modal.get_by_role("button", name=confirm_label).click()
+
+    page.locator("[role='dialog']").first.wait_for(state="hidden", timeout=30_000)
+    page.wait_for_timeout(1_500)
+
+
+def take_debug_screenshot(page, tag):
+    """Save a screenshot for debugging failures."""
+    path = SCREENSHOTS_DIR / f"debug_{tag}.png"
+    page.screenshot(path=str(path), full_page=True)
+    print(f"  [debug] Screenshot saved: {path}")
 
 
 # ---------------------------------------------------------------------------
-# Pass orchestration (extracted for testability)
+# Pass orchestration
 # ---------------------------------------------------------------------------
 
 def execute_approval_pass(page, approvals):
     """
-    Select all approval checkboxes and submit the Approve action en masse.
+    Select all approval rows by record ID and submit the Approve action.
 
     Returns:
-        dict: {"succeeded": int, "failed": list[dict]}
+        dict: {"attempted": int, "succeeded": int, "missing": list[str]}
     """
-    approval_set = {(a["employee"], a["skill"]) for a in approvals}
-    selected_count = 0
-    failed_to_find = []
+    if not approvals:
+        return {"attempted": 0, "succeeded": 0, "missing": []}
 
-    for emp, skill in approval_set:
-        cb = find_row_checkbox(page, emp, skill)
-        if cb:
-            if not cb.is_checked():
-                cb.click()
-            selected_count += 1
-        else:
-            failed_to_find.append({"employee": emp, "skill": skill})
+    approval_ids = [a["record_id"] for a in approvals if a["record_id"]]
+    result = select_rows_by_ids(page, approval_ids)
 
-    if selected_count > 0:
-        click_button_in_header(page, "Approve")
-        fill_dialog_comment_and_confirm(page, APPROVE_COMMENT, "Approve")
-        time.sleep(3)
+    selected = result.get("selected", 0)
+    missing = result.get("missing", [])
+
+    print(f"  Selected {selected}/{len(approval_ids)} rows. Missing: {len(missing)}")
+    if missing:
+        print(f"  Missing IDs: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+
+    if selected > 0:
+        click_page_button(page, "Approve")
+        fill_and_confirm_modal(page, APPROVE_COMMENT, "Approve")
 
     return {
-        "succeeded": selected_count,
-        "failed": failed_to_find,
+        "attempted": len(approval_ids),
+        "succeeded": selected,
+        "missing": missing,
     }
 
 
-def execute_rejection_pass(page, rejections):
+def execute_rejection_pass(page, rejections, all_rows):
     """
-    Process each rejection individually: select → Reject → fill comment → confirm.
+    Reject each row individually using Discussion Notes as the comment.
+    all_rows is used to resolve employee+skill to a record ID for rows
+    where the CSV record ID may not match (fallback by name).
 
     Returns:
-        list[dict]: one entry per rejection with keys employee, skill, status, error.
+        list[dict]: one entry per rejection with employee, skill, status, error.
     """
-    scroll_to_load_all(page)
     results = []
 
     for item in rejections:
         emp = item["employee"]
         skill = item["skill"]
         notes = item["notes"]
+        record_id = item["record_id"]
         entry = {"employee": emp, "skill": skill, "status": "unknown", "error": ""}
 
-        cb = find_row_checkbox(page, emp, skill)
-        if not cb:
+        # Try to resolve ID: use CSV ID first, fall back to name-match from live rows
+        if not record_id:
+            record_id = match_row_id(all_rows, emp, skill)
+
+        if not record_id:
             entry["status"] = "skipped"
-            entry["error"] = "Row not found on page after approval pass"
+            entry["error"] = "Record ID not found in CSV or live grid rows"
             results.append(entry)
             continue
 
-        for other_cb in page.query_selector_all(
-            "tr[data-row-key-value] input[type='checkbox']:checked"
-        ):
-            other_cb.click()
-        time.sleep(0.3)
+        print(f"\n  Rejecting: {emp} | {skill} ({record_id})")
 
-        if not cb.is_checked():
-            cb.click()
-        time.sleep(0.3)
+        clear_selection(page)
+        page.wait_for_timeout(300)
+
+        sel_result = select_rows_by_ids(page, [record_id])
+        if sel_result.get("selected", 0) == 0:
+            entry["status"] = "skipped"
+            entry["error"] = f"Row {record_id} not found on page — may have been already actioned"
+            results.append(entry)
+            continue
 
         try:
-            click_button_in_header(page, "Reject")
-            fill_dialog_comment_and_confirm(page, notes, "Reject")
+            click_page_button(page, "Reject")
+            fill_and_confirm_modal(page, notes, "Reject")
             entry["status"] = "success"
+            print(f"    Rejected OK.")
         except Exception as exc:
             entry["status"] = "failed"
             entry["error"] = str(exc)
+            take_debug_screenshot(page, f"reject_fail_{record_id}")
+            print(f"    ERROR: {exc}")
 
         results.append(entry)
-        time.sleep(2)
+        page.wait_for_timeout(1_000)
 
     return results
 
@@ -262,61 +386,74 @@ def run():
     print(f"Loaded {len(approvals)} approvals and {len(rejections)} rejections from CSV.")
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False, slow_mo=300)
+        browser = pw.chromium.launch(headless=False, slow_mo=200)
         context = browser.new_context(viewport={"width": 1400, "height": 900})
         page = context.new_page()
 
-        print("\n[1/4] Navigating to org62 login…")
-        page.goto("https://org62.lightning.force.com/", wait_until="domcontentloaded")
+        print(f"\n[1/4] Opening Mass Approve page: {MASS_APPROVE_URL}")
+        page.goto(MASS_APPROVE_URL, wait_until="domcontentloaded")
+
         print(
-            "\n>>> Please log in to org62 in the browser window that just opened.\n"
-            ">>> After you are fully logged in, press ENTER to continue."
+            "\n>>> Log in via the browser window that just opened.\n"
+            ">>> After the Mass Approve page loads and the grid is visible,\n"
+            ">>> press ENTER here to continue."
         )
         input()
 
-        print("\n[2/4] Navigating to Mass Approve Skills and Certification…")
-        page.goto(MASS_APPROVE_URL, wait_until="domcontentloaded")
-        time.sleep(3)
-
-        print(">>> Waiting for the ratings table to load…")
+        print(">>> Waiting for the Bryntum grid to load…")
         try:
-            wait_for_table(page)
+            wait_for_grid(page)
         except PWTimeout:
-            print("WARNING: Table did not appear within 60 s — check the page manually.")
-            input("Press ENTER when the table is visible…")
+            take_debug_screenshot(page, "grid_timeout")
+            print("WARNING: Grid did not appear in 60 s. Check debug screenshot.")
+            input("Press ENTER when the grid is fully visible to retry…")
+            wait_for_grid(page)
 
-        print(">>> Scrolling to load all rows…")
-        scroll_to_load_all(page)
+        print(">>> Collecting all rows from the grid…")
         all_rows = get_all_rows(page)
-        print(f"    Found {len(all_rows)} rows on page.")
+        print(f"    Found {len(all_rows)} rows.")
 
-        print(f"\n[3/4] Pass 1 — Approving {len(approvals)} records…")
+        if not all_rows:
+            take_debug_screenshot(page, "no_rows")
+            print("ERROR: No rows found — check debug screenshot and verify the page loaded.")
+            browser.close()
+            return
+
+        # ── Pass 1: Approvals ─────────────────────────────────────────────
+        print(f"\n[3/4] Pass 1 — Approving {len(approvals)} records en masse…")
         approval_result = execute_approval_pass(page, approvals)
         print(
-            f"  Succeeded: {approval_result['succeeded']}, "
-            f"not found: {len(approval_result['failed'])}"
+            f"  Submitted: {approval_result['succeeded']} approved, "
+            f"{len(approval_result['missing'])} not found on page."
         )
 
-        print(f"\n[4/4] Pass 2 — Rejecting {len(rejections)} records individually…")
-        rejection_results = execute_rejection_pass(page, rejections)
+        # Re-collect rows after approvals are removed from the queue
+        print(">>> Re-collecting rows after approval pass…")
+        page.wait_for_timeout(2_000)
+        try:
+            wait_for_grid(page)
+            all_rows = get_all_rows(page)
+            print(f"    {len(all_rows)} rows remaining.")
+        except PWTimeout:
+            print("WARNING: Grid not visible after approval — proceeding with original row data.")
 
+        # ── Pass 2: Rejections ────────────────────────────────────────────
+        print(f"\n[4/4] Pass 2 — Rejecting {len(rejections)} records individually…")
+        rejection_results = execute_rejection_pass(page, rejections, all_rows)
+
+        # ── Write results ─────────────────────────────────────────────────
         results = {
-            "approvals": {
-                "attempted": len(approvals),
-                "succeeded": approval_result["succeeded"],
-                "failed": approval_result["failed"],
-            },
+            "approvals": approval_result,
             "rejections": rejection_results,
         }
-
         with open(RESULTS_PATH, "w") as f:
             json.dump(results, f, indent=2)
 
         print(f"\n✓ Done. Results written to {RESULTS_PATH}")
-        rejection_summary: dict[str, int] = {}
+        summary = {}
         for r in rejection_results:
-            rejection_summary[r["status"]] = rejection_summary.get(r["status"], 0) + 1
-        print(f"  Rejections: {rejection_summary}")
+            summary[r["status"]] = summary.get(r["status"], 0) + 1
+        print(f"  Rejections: {summary}")
 
         input("\nPress ENTER to close the browser…")
         browser.close()
