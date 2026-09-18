@@ -493,6 +493,17 @@ class TestCertCorroboratesSkill:
         )
         assert matched is False
 
+    def test_org_platform_strategy_cert_path_uses_correct_scale(self):
+        """Regression: cert path for Org or Platform Strategy must use the 4-point scale
+        (1-Entry / 2-Intermediate / 3-Advanced / 4-Expert). The old text incorrectly
+        referenced '4-Specialist' and a non-existent '5-Expert' level."""
+        path = vsr._find_cert_recommendation("Org or Platform Strategy")
+        assert path != "", "cert recommendation must not be empty for this skill"
+        assert "4-Specialist" not in path, "4-Specialist is not a valid level in the 4-point scale"
+        assert "5-Expert" not in path, "5-Expert does not exist in the 4-point scale"
+        assert "3-Advanced" in path, "cert path must reference 3-Advanced as the baseline"
+        assert "4-Expert" in path, "cert path must reference 4-Expert as the top level"
+
     def test_cka_does_not_match_containerization(self):
         """CKA short name doesn't match 'containerization' domain map or word list."""
         matched, _ = vsr.cert_corroborates_skill(
