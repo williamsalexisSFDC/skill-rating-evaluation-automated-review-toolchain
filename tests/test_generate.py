@@ -161,6 +161,37 @@ class TestSummarizeNotes:
         result = gen._summarize_notes(notes)
         assert len(result) <= 80 + 1  # truncated at 80 chars + possible " | "
 
+    def test_af_not_enabled_not_truncated(self):
+        # Regression: AF NOT ENABLED note was silently truncated at 80 chars
+        # by the catch-all else branch, cutting off mid-word ("Agentforc").
+        notes = (
+            "AF NOT ENABLED: Craig Scott has not completed AF Enabled requirements "
+            "(Agentforce Champion, Innovator, and Legend Trailhead superbadges + "
+            "Salesforce Certified Data Cloud / Data 360 Consultant cert). "
+            "AF skill ratings cannot count toward Agentforce Ready status until "
+            "enablement is complete."
+        )
+        result = gen._summarize_notes(notes)
+        assert len(result) > 80
+        assert "AF Not Enabled" in result
+        assert "Data Cloud" in result
+        # Must not contain the truncated mid-word artifact
+        assert "Agentforc\"" not in result
+        assert result.endswith("cert first")
+
+    def test_af_not_enabled_full_justification_preserves_complete_message(self):
+        notes = (
+            "AF NOT ENABLED: Craig Scott has not completed AF Enabled requirements "
+            "(Agentforce Champion, Innovator, and Legend Trailhead superbadges + "
+            "Salesforce Certified Data Cloud / Data 360 Consultant cert). "
+            "AF skill ratings cannot count toward Agentforce Ready status until "
+            "enablement is complete."
+        )
+        result = gen._summarize_notes(notes, full_justification=True)
+        assert "Craig Scott" in result
+        assert "enablement is complete." in result
+        assert result == notes
+
 
 # ---------------------------------------------------------------------------
 # _extract_grade_req()

@@ -290,6 +290,14 @@ def _summarize_notes(notes: str, full_justification: bool = False) -> str:
             short.append("No cert evidence for 4-Specialist claim")
         elif "not found in PSA catalog" in p:
             short.append("Not in PSA catalog (new skill — verify name)")
+        elif p.startswith("AF NOT ENABLED:"):
+            if full_justification:
+                short.append(p)
+            else:
+                short.append(
+                    "AF Not Enabled — complete Champion/Innovator/Legend Trailhead badges "
+                    "+ Data Cloud/Data 360 Consultant cert first"
+                )
         elif p.startswith("JUSTIFICATION REQUIRED:"):
             if full_justification:
                 # Employee tab: show the complete criteria so the employee knows
