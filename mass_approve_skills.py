@@ -331,9 +331,12 @@ def fill_and_confirm_modal(page, comment, confirm_label):
     approval/rejection modal is genuinely open.
 
     Textarea: matched by class slds-textarea (stable; id is dynamic).
-    Confirm button: the button lives inside a native-shadow-DOM footer component
-        (evidenced by part="button" on the element). page.locator cannot pierce
-        native shadow DOM, so we walk shadow roots via JS evaluate instead.
+    Confirm button: the <button> lives inside lightning-button's shadow root.
+        Strategy 1: compound CSS "lightning-button button[title='...']" — the same
+        pattern that works for the page Approve/Reject buttons (Playwright pierces the
+        lightning-button host's shadow root when the host is explicitly named).
+        Strategy 2: keyboard Tab×2 + Enter from the textarea — bypasses all shadow
+        DOM issues; Tab order in this modal is: textarea → Cancel → Approve.
     Modal-closed signal: textarea transitions to hidden state.
     """
     # Capture the page immediately after the button click — shows whether the
@@ -349,26 +352,21 @@ def fill_and_confirm_modal(page, comment, confirm_label):
         raise
     textarea.fill(comment)
 
-    # The confirm button is in a native shadow DOM context (part="button") that
-    # page.locator cannot pierce — walk shadow roots via JS to find and click it.
+    # Strategy 1: compound CSS anchored at the lightning-button host element.
+    # Playwright can pierce a named shadow host; the page Approve/Reject buttons
+    # are found the same way (lightning-button[data-id=...] button).
     title = f"{confirm_label} Skill or Certification Rating"
-    found = page.evaluate(
-        """(title) => {
-            function findAndClick(root) {
-                const btn = root.querySelector('button[title="' + title + '"]');
-                if (btn) { btn.click(); return true; }
-                for (const el of root.querySelectorAll('*')) {
-                    if (el.shadowRoot && findAndClick(el.shadowRoot)) return true;
-                }
-                return false;
-            }
-            return findAndClick(document);
-        }""",
-        title,
-    )
-    if not found:
-        screenshot(page, f"{confirm_label.lower()}_ERROR_confirm_btn_not_found")
-        raise RuntimeError(f"Confirm button '{title}' not found in page or shadow roots")
+    confirm_btn = page.locator(f"lightning-button button[title='{title}']")
+    try:
+        confirm_btn.wait_for(state="visible", timeout=5_000)
+        confirm_btn.click()
+    except PWTimeout:
+        # Strategy 2: keyboard nav — Tab from textarea skips to Cancel, second Tab
+        # lands on Approve/Reject, Enter activates it.  Works regardless of shadow DOM.
+        screenshot(page, f"{confirm_label.lower()}_fallback_keyboard")
+        page.keyboard.press("Tab")
+        page.keyboard.press("Tab")
+        page.keyboard.press("Enter")
 
     # Textarea disappearing is a reliable signal the modal closed
     try:
