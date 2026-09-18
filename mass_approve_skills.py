@@ -21,6 +21,7 @@ Results are written to mass_approve_results.json in the same directory.
 import csv
 import datetime
 import json
+import shutil
 import time
 from pathlib import Path
 
@@ -36,7 +37,7 @@ CSV_PATH = (
     / "skill_rating_review.xlsx - Manager Tracker.csv"
 )
 RESULTS_PATH = Path(__file__).parent / "mass_approve_results.json"
-SCREENSHOTS_DIR = Path(__file__).parent
+SCREENSHOTS_DIR = Path(__file__).parent / "screenshots"
 MASS_APPROVE_URL = (
     "https://org62.lightning.force.com/lightning/n/Mass_Approve_Skills_and_Certification"
 )
@@ -432,6 +433,10 @@ def execute_rejection_pass(page, rejections, all_rows):
 def run():
     approvals, rejections = load_csv()
     print(f"Loaded {len(approvals)} approvals and {len(rejections)} rejections from CSV.")
+
+    shutil.rmtree(SCREENSHOTS_DIR, ignore_errors=True)
+    SCREENSHOTS_DIR.mkdir(exist_ok=True)
+    print(f"Screenshots will be saved to: {SCREENSHOTS_DIR}")
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=False, slow_mo=200)
