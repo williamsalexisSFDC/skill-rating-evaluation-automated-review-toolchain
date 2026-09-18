@@ -240,9 +240,21 @@ class TestFillAndConfirmModal:
         textarea = MagicMock()
         confirm_btn = MagicMock()
 
-        page.locator.return_value.first = modal
-        modal.get_by_label.return_value = textarea
-        modal.get_by_role.return_value = confirm_btn
+        # page.locator("[role='dialog']").first → modal
+        # page.locator("button[title=...]") → confirm_btn locator
+        def locator_side_effect(selector, **kwargs):
+            lc = MagicMock()
+            if "role='dialog'" in selector or 'role="dialog"' in selector:
+                lc.first = modal
+            elif "button[title=" in selector:
+                lc.first = confirm_btn
+                lc.click = confirm_btn.click
+            else:
+                lc.first = MagicMock()
+            return lc
+
+        page.locator.side_effect = locator_side_effect
+        modal.locator.return_value = textarea
 
         return page, modal, textarea, confirm_btn
 
@@ -255,17 +267,23 @@ class TestFillAndConfirmModal:
     def test_waits_for_modal_to_close(self):
         page, modal, textarea, confirm_btn = self._setup()
         mas.fill_and_confirm_modal(page, "comment", "Reject")
-        hidden_call = [
-            c for c in page.locator.return_value.first.wait_for.call_args_list
-            if c[1].get("state") == "hidden"
-        ]
-        # modal.wait_for(hidden) is the closing wait
         assert page.wait_for_timeout.called
 
-    def test_uses_role_for_confirm_button(self):
+    def test_textarea_selected_by_slds_class(self):
+        page, modal, textarea, confirm_btn = self._setup()
+        mas.fill_and_confirm_modal(page, "x", "Approve")
+        selector_used = modal.locator.call_args[0][0]
+        assert "slds-textarea" in selector_used
+
+    def test_confirm_button_selected_by_title(self):
         page, modal, textarea, confirm_btn = self._setup()
         mas.fill_and_confirm_modal(page, "x", "Reject")
-        modal.get_by_role.assert_called_once_with("button", name="Reject")
+        title_selector = [
+            c[0][0] for c in page.locator.call_args_list
+            if "button[title=" in c[0][0]
+        ]
+        assert len(title_selector) == 1
+        assert "Reject Skill or Certification Rating" in title_selector[0]
 
 
 # ---------------------------------------------------------------------------
