@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.xlsx
+team_roster.csv
+debug_*.png
