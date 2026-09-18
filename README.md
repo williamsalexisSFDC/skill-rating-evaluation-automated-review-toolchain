@@ -251,9 +251,13 @@ Ramandeep Kaur,Grade 5,Yes
 
 **Condition:** The employee is not listed as AF Enabled in `team_roster.csv` AND the rating on any Agentforce-designated skill is 3+.
 
-**Output behavior:** An `AF NOT ENABLED:` note appears in the Flags column. This note is **informational only** — it does not change the Pre-Disposition. If the rating is otherwise fully justified (cert on file, qualifying RRs on file, rating at or above minimum), the record still shows **Approve** (green) with the informational note visible. The note becomes **Discuss** (yellow) only when other issues exist alongside it (e.g., a CERT: or catalog flag). It becomes **Change Required** (red) only when an `AGENTFORCE:` gate also fails.
+**Output behavior differs by rating level:**
 
-**What the note means:** AF skill ratings accumulate in the system, but they cannot count toward the employee's Agentforce Ready or Agentforce Expert designation until AF Enabled prerequisites are complete (Agentforce Champion, Innovator, and Legend Trailhead superbadges + Salesforce Certified Data Cloud / Data 360 Consultant cert).
+- **3-Advanced + not AF Enabled:** `AF NOT ENABLED:` note — **informational only, Approve (green)**. The 3-Advanced rating may be fully justified by the Agentforce Specialist cert and qualifying RRs. Employees need this path to accumulate the skill evidence required for AF Ready; blocking it at 3-Advanced would create a circular dependency.
+
+- **4-Expert + not AF Enabled:** `AGENTFORCE:` note — **Change Required (red)**. Expert-level mastery of the AF stack presupposes the Data Cloud credential and superbadges that define foundational enablement. A 4-Expert claim without AF Enabled status is not supportable.
+
+**What the note means:** AF skill ratings at 3-Advanced can be earned on the path to AF Enabled. AF Enabled is the prerequisite before those ratings can count toward Agentforce Ready or Expert status, and a prerequisite for any 4-Expert AF skill claim.
 
 **Output columns added for AF skills:**
 - `AF Ready Skill` — `Yes (1 of 17)` if the skill is one of the 17 Agentforce Ready Key Skills; `Expert Only` if it is one of the 4 Expert-only advanced skills
