@@ -213,20 +213,27 @@ class TestMatchRowId:
 # ---------------------------------------------------------------------------
 
 class TestClickPageButton:
-    def test_clicks_first_matching_button(self):
+    def test_waits_and_clicks_button(self):
         page = _mock_page()
         mock_btn = MagicMock()
-        page.get_by_role.return_value.first = mock_btn
+        page.locator.return_value = mock_btn
         mas.click_page_button(page, "Approve")
         mock_btn.wait_for.assert_called_once_with(state="visible", timeout=15_000)
         mock_btn.click.assert_called_once()
 
-    def test_uses_correct_role_and_name(self):
+    def test_uses_data_id_selector_not_role(self):
         page = _mock_page()
-        mock_btn = MagicMock()
-        page.get_by_role.return_value.first = mock_btn
+        page.locator.return_value = MagicMock()
         mas.click_page_button(page, "Reject")
-        page.get_by_role.assert_called_once_with("button", name="Reject")
+        selectors = [c[0][0] for c in page.locator.call_args_list]
+        assert any("data-id" in s and "reject" in s for s in selectors)
+        assert not any("get_by_role" in str(s) for s in selectors)
+
+    def test_presses_escape_before_clicking(self):
+        page = _mock_page()
+        page.locator.return_value = MagicMock()
+        mas.click_page_button(page, "Approve")
+        page.keyboard.press.assert_called_with("Escape")
 
 
 # ---------------------------------------------------------------------------

@@ -303,8 +303,19 @@ def match_row_id(rows, employee, skill):
 # ---------------------------------------------------------------------------
 
 def click_page_button(page, label):
-    """Click a top-level Approve or Reject button on the page."""
-    btn = page.get_by_role("button", name=label).first
+    """Click the Approve or Reject action button in the grid header.
+
+    Uses lightning-button[data-id] rather than get_by_role(name=label) because
+    Playwright's get_by_role does substring matching — 'Approve' would match the
+    nav-bar tab management button for 'Mass Approve Skills...' before reaching
+    the grid button, opening a tab dropdown instead of the approval modal.
+
+    Presses Escape first to close any open dropdowns whose backdrop overlay
+    would otherwise intercept the click.
+    """
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    btn = page.locator(f"lightning-button[data-id='{label.lower()}'] button")
     btn.wait_for(state="visible", timeout=15_000)
     btn.click()
 
