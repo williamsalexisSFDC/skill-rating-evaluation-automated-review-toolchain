@@ -66,7 +66,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
+          AHEAD=$(gh api repos/${{ github.repository }}/compare/main...dev --jq '.ahead_by')
+          if [ "$AHEAD" -eq 0 ]; then
+            echo "dev has no commits ahead of main -- no PR needed"
+            exit 0
+          fi
           EXISTING=$(gh pr list --base main --head dev --state open --json number --jq 'length')
           if [ "$EXISTING" -eq 0 ]; then
             {
