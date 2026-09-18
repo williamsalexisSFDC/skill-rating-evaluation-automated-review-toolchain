@@ -235,55 +235,68 @@ class TestClickPageButton:
 
 class TestFillAndConfirmModal:
     def _setup(self):
+        """
+        page.locator("textarea.slds-textarea") → textarea locator
+        page.locator("button[title=...]")      → confirm_btn locator
+        No [role='dialog'] lookup — we skip that to avoid the hidden Aura error dialog.
+        """
         page = _mock_page()
-        modal = MagicMock()
         textarea = MagicMock()
         confirm_btn = MagicMock()
 
-        # page.locator("[role='dialog']").first → modal
-        # page.locator("button[title=...]") → confirm_btn locator
         def locator_side_effect(selector, **kwargs):
             lc = MagicMock()
-            if "role='dialog'" in selector or 'role="dialog"' in selector:
-                lc.first = modal
+            if "slds-textarea" in selector:
+                # textarea locator — .fill() and .wait_for() called on it directly
+                lc.fill = textarea.fill
+                lc.wait_for = textarea.wait_for
+                return lc
             elif "button[title=" in selector:
-                lc.first = confirm_btn
+                lc.wait_for = confirm_btn.wait_for
                 lc.click = confirm_btn.click
-            else:
-                lc.first = MagicMock()
+                return lc
             return lc
 
         page.locator.side_effect = locator_side_effect
-        modal.locator.return_value = textarea
-
-        return page, modal, textarea, confirm_btn
+        return page, textarea, confirm_btn
 
     def test_fills_textarea_and_clicks_confirm(self):
-        page, modal, textarea, confirm_btn = self._setup()
+        page, textarea, confirm_btn = self._setup()
         mas.fill_and_confirm_modal(page, "my comment", "Approve")
         textarea.fill.assert_called_once_with("my comment")
         confirm_btn.click.assert_called_once()
 
-    def test_waits_for_modal_to_close(self):
-        page, modal, textarea, confirm_btn = self._setup()
+    def test_waits_for_textarea_to_open_and_close(self):
+        page, textarea, confirm_btn = self._setup()
         mas.fill_and_confirm_modal(page, "comment", "Reject")
-        assert page.wait_for_timeout.called
+        # wait_for called at least twice: visible (open) + hidden (closed)
+        assert textarea.wait_for.call_count >= 2
+        states = [c[1].get("state") for c in textarea.wait_for.call_args_list]
+        assert "visible" in states
+        assert "hidden" in states
 
     def test_textarea_selected_by_slds_class(self):
-        page, modal, textarea, confirm_btn = self._setup()
+        page, textarea, confirm_btn = self._setup()
         mas.fill_and_confirm_modal(page, "x", "Approve")
-        selector_used = modal.locator.call_args[0][0]
-        assert "slds-textarea" in selector_used
+        selectors = [c[0][0] for c in page.locator.call_args_list]
+        assert any("slds-textarea" in s for s in selectors)
 
     def test_confirm_button_selected_by_title(self):
-        page, modal, textarea, confirm_btn = self._setup()
+        page, textarea, confirm_btn = self._setup()
         mas.fill_and_confirm_modal(page, "x", "Reject")
-        title_selector = [
+        title_selectors = [
             c[0][0] for c in page.locator.call_args_list
             if "button[title=" in c[0][0]
         ]
-        assert len(title_selector) == 1
-        assert "Reject Skill or Certification Rating" in title_selector[0]
+        assert len(title_selectors) == 1
+        assert "Reject Skill or Certification Rating" in title_selectors[0]
+
+    def test_no_role_dialog_lookup(self):
+        """Regression: must not wait on [role='dialog'] — matches hidden Aura error box."""
+        page, textarea, confirm_btn = self._setup()
+        mas.fill_and_confirm_modal(page, "x", "Approve")
+        selectors = [c[0][0] for c in page.locator.call_args_list]
+        assert not any("role='dialog'" in s or 'role="dialog"' in s for s in selectors)
 
 
 # ---------------------------------------------------------------------------
