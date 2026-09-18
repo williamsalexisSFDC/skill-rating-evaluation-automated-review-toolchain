@@ -265,13 +265,15 @@ def _summarize_notes(notes: str, full_justification: bool = False) -> str:
             if m:
                 parts_d.append(f"{m.group(1)} RRs on file, need {m.group(2)}+")
             short.append("AF delivery: " + ("; ".join(parts_d) if parts_d else "evidence missing"))
+        elif p.startswith("AGENTFORCE:") and "data 360" in p.lower():
+            short.append("AF: Data Cloud cert required (Agentforce Specialist not sufficient)")
         elif p.startswith("AGENTFORCE:"):
             # Extract just the rating vs. required
             m = re.search(r"minimum rating of (\d)-\w+.*?rating: ([^.]+)", p)
             if m:
                 short.append(f"AF: needs {m.group(1)}+, currently {m.group(2).strip()}")
             else:
-                short.append("AF: below minimum")
+                short.append("AF: evidence gap")
         elif p.startswith("DEVOPS:"):
             m = re.search(r"below the (.+?) minimum of (\d+)", p)
             if m:

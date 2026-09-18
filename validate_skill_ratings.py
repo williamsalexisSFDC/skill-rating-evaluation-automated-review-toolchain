@@ -649,10 +649,9 @@ CERT_SKILL_EXCLUSIONS = {
     "shield": [
         "observability",
     ],
-    "agentforce specialist": [
-        "data 360",
-        "data cloud",
-    ],
+    # Agentforce Specialist is intentionally NOT excluded from Data 360/Data Cloud —
+    # it is relevant evidence even though it isn't sufficient on its own (the
+    # separate Data 360 check adds a note about the missing Data Cloud cert).
 }
 
 _KEYWORD_BLOCKLIST = {"platform", "certified", "salesforce", "cloud"}
@@ -824,6 +823,11 @@ def validate_record(row: dict, catalog: dict, agentforce: dict, devops: dict,
                 "Salesforce Certified Data 360 / Data Cloud Consultant cert — Agentforce Specialist "
                 "alone does not validate Data Cloud data ingestion, identity resolution, or "
                 "segmentation capabilities. No Data Cloud cert on file."
+            )
+            result["Suggested Cert Path"] = (
+                "Salesforce Certified Data Cloud Consultant / Data 360 Consultant "
+                "(covers data ingestion, identity resolution, segmentation, and data actions). "
+                "Agentforce Specialist alone is not sufficient for this skill."
             )
 
     if (af_entry and rating >= 3
