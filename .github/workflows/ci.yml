@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            openpyxl \
+            google-api-python-client \
+            google-auth-oauthlib \
+            cryptography \
+            pytest \
+            pytest-cov
+
+      - name: Run tests with coverage gate
+        run: |
+          pytest tests/ \
+            --cov=validate_skill_ratings \
+            --cov=generate_review_artifacts \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=90 \
+            -v
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  auto-pr-and-merge:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create PR to main if not exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          EXISTING=$(gh pr list --base main --head dev --state open --json number --jq 'length')
+          if [ "$EXISTING" -eq 0 ]; then
+            gh pr create \
+              --base main \
+              --head dev \
+              --title "dev → main: automated merge (tests passed)" \
+              --body "$(cat <<'EOF'
+Automated PR created by CI after all tests passed with ≥90% coverage.
+
+**Triggered by:** push to \`dev\`
+**Status:** tests passed, coverage gate met
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)"
+          else
+            echo "PR already exists — skipping create"
+          fi
+
+      - name: Enable auto-merge on PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          PR_NUM=$(gh pr list --base main --head dev --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR_NUM" ]; then
+            gh pr merge "$PR_NUM" --auto --squash
+            echo "Auto-merge enabled on PR #$PR_NUM"
+          else
+            echo "No open PR found — nothing to merge"
+          fi
