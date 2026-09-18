@@ -266,23 +266,31 @@ def click_page_button(page, label):
 def fill_and_confirm_modal(page, comment, confirm_label):
     """Fill the Comments textarea in the open modal and click the confirm button.
 
-    Textarea: matched by class slds-textarea (no name/id, dynamic id).
-    Confirm button: matched by title attribute, which is unique and stable:
-        "Approve Skill or Certification Rating" / "Reject Skill or Certification Rating"
-    """
-    modal = page.locator("[role='dialog']").first
-    modal.wait_for(state="visible", timeout=15_000)
+    We skip waiting for [role='dialog'] because Salesforce always has a hidden Aura
+    error dialog in the DOM with that role (id="auraError", class="auraErrorBox") —
+    Playwright's .first would resolve to that hidden element and time out.
 
-    # slds-textarea is the only static identifier on this element (no name, dynamic id)
-    textarea = modal.locator("textarea.slds-textarea")
-    textarea.wait_for(state="visible", timeout=10_000)
+    Instead we wait directly for the textarea, which only exists in the DOM when the
+    approval/rejection modal is genuinely open.
+
+    Textarea: matched by class slds-textarea (stable; id is dynamic).
+    Confirm button: matched by title attribute (stable and unique):
+        "Approve Skill or Certification Rating" / "Reject Skill or Certification Rating"
+    Modal-closed signal: textarea transitions to hidden state.
+    """
+    # Wait for textarea — only present when the correct modal is open
+    textarea = page.locator("textarea.slds-textarea")
+    textarea.wait_for(state="visible", timeout=15_000)
     textarea.fill(comment)
 
-    # title is stable and unique; guards against colliding with same-text header buttons
+    # title is stable and unique; avoids colliding with same-text header buttons
     title = f"{confirm_label} Skill or Certification Rating"
-    page.locator(f"button[title='{title}']").click()
+    confirm_btn = page.locator(f"button[title='{title}']")
+    confirm_btn.wait_for(state="visible", timeout=10_000)
+    confirm_btn.click()
 
-    page.locator("[role='dialog']").first.wait_for(state="hidden", timeout=30_000)
+    # Textarea disappearing is a reliable signal the modal closed
+    textarea.wait_for(state="hidden", timeout=30_000)
     page.wait_for_timeout(1_500)
 
 
