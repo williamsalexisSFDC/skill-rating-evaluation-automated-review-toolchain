@@ -61,6 +61,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync dev forward if behind main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git fetch origin main
+          BEHIND=$(git rev-list --count HEAD..origin/main)
+          if [ "$BEHIND" -gt 0 ]; then
+            echo "dev is $BEHIND commit(s) behind main -- fast-forwarding"
+            git merge origin/main --ff-only
+            git push origin HEAD:dev
+          else
+            echo "dev is up to date with main"
+          fi
 
       - name: Create PR to main if not exists
         env:
@@ -96,7 +114,7 @@ jobs:
         run: |
           PR_NUM=$(gh pr list --base main --head dev --state open --json number --jq '.[0].number // empty')
           if [ -n "$PR_NUM" ]; then
-            gh pr merge "$PR_NUM" --auto --squash \
+            gh pr merge "$PR_NUM" --auto --merge \
               && echo "Auto-merge enabled on PR #$PR_NUM" \
               || echo "Auto-merge skipped (PR may already be merged or merging)"
           else
