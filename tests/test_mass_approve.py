@@ -298,6 +298,71 @@ class TestFillAndConfirmModal:
         selectors = [c[0][0] for c in page.locator.call_args_list]
         assert not any("role='dialog'" in s or 'role="dialog"' in s for s in selectors)
 
+    def test_initial_screenshot_captured_after_btn_click(self):
+        """Screenshot is taken immediately on entry — captures page state after button click."""
+        page, textarea, confirm_btn = self._setup()
+        mas.fill_and_confirm_modal(page, "x", "Approve")
+        assert page.screenshot.call_count >= 1
+        first_path = page.screenshot.call_args_list[0][1]["path"]
+        assert "after_btn_click" in first_path
+
+    def _setup_timeout(self, textarea_side_effect=None, confirm_side_effect=None):
+        """Setup with configurable timeout side effects."""
+        page = _mock_page()
+        textarea = MagicMock()
+        confirm_btn = MagicMock()
+
+        def locator_side_effect(selector, **kwargs):
+            lc = MagicMock()
+            if "slds-textarea" in selector:
+                lc.fill = textarea.fill
+                lc.wait_for = textarea.wait_for
+                return lc
+            elif "button[title=" in selector:
+                lc.wait_for = confirm_btn.wait_for
+                lc.click = confirm_btn.click
+                return lc
+            return lc
+
+        page.locator.side_effect = locator_side_effect
+        if textarea_side_effect is not None:
+            textarea.wait_for.side_effect = textarea_side_effect
+        if confirm_side_effect is not None:
+            confirm_btn.wait_for.side_effect = confirm_side_effect
+        return page, textarea, confirm_btn
+
+    def test_error_screenshot_and_reraise_on_textarea_timeout(self):
+        from playwright.sync_api import TimeoutError as PWTimeout
+        page, textarea, _ = self._setup_timeout(
+            textarea_side_effect=PWTimeout("textarea timeout")
+        )
+        with pytest.raises(PWTimeout):
+            mas.fill_and_confirm_modal(page, "x", "Approve")
+        assert page.screenshot.call_count >= 2
+        paths = [c[1]["path"] for c in page.screenshot.call_args_list]
+        assert any("ERROR" in p for p in paths)
+
+    def test_error_screenshot_and_reraise_on_confirm_btn_timeout(self):
+        from playwright.sync_api import TimeoutError as PWTimeout
+        page, _, confirm_btn = self._setup_timeout(
+            confirm_side_effect=PWTimeout("btn timeout")
+        )
+        with pytest.raises(PWTimeout):
+            mas.fill_and_confirm_modal(page, "x", "Approve")
+        paths = [c[1]["path"] for c in page.screenshot.call_args_list]
+        assert any("ERROR" in p for p in paths)
+
+    def test_error_screenshot_and_reraise_on_modal_not_closing(self):
+        from playwright.sync_api import TimeoutError as PWTimeout
+        page, textarea, _ = self._setup_timeout(
+            # First call (visible) succeeds, second call (hidden) raises
+            textarea_side_effect=[None, PWTimeout("modal stuck")]
+        )
+        with pytest.raises(PWTimeout):
+            mas.fill_and_confirm_modal(page, "x", "Approve")
+        paths = [c[1]["path"] for c in page.screenshot.call_args_list]
+        assert any("ERROR" in p for p in paths)
+
 
 # ---------------------------------------------------------------------------
 # execute_approval_pass
@@ -441,6 +506,31 @@ class TestTakeDebugScreenshot:
         call_kwargs = page.screenshot.call_args[1]
         assert "test_tag" in call_kwargs["path"]
         assert call_kwargs["full_page"] is True
+
+
+# ---------------------------------------------------------------------------
+# screenshot (timestamped workflow-step helper)
+# ---------------------------------------------------------------------------
+
+class TestScreenshot:
+    def test_calls_page_screenshot_full_page(self):
+        page = _mock_page()
+        mas.screenshot(page, "my_step")
+        page.screenshot.assert_called_once()
+        call_kwargs = page.screenshot.call_args[1]
+        assert call_kwargs["full_page"] is True
+
+    def test_step_name_in_path(self):
+        page = _mock_page()
+        mas.screenshot(page, "my_step")
+        call_kwargs = page.screenshot.call_args[1]
+        assert "my_step" in call_kwargs["path"]
+
+    def test_run_timestamp_in_path(self):
+        page = _mock_page()
+        mas.screenshot(page, "step")
+        call_kwargs = page.screenshot.call_args[1]
+        assert mas._RUN_TS in call_kwargs["path"]
 
 
 # ---------------------------------------------------------------------------
