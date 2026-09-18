@@ -378,8 +378,16 @@ class TestLoadCertifications:
 # ---------------------------------------------------------------------------
 
 class TestLoadAgentforceRrs:
+    _HEADERS = ("Employee,RR Name,Primary Skill,Status,Start Date,End Date,"
+                "Duration Days,AF Skill,Post GA,Active Status,Long Enough,Qualifying")
+
     def test_basic_load(self, tmp_path):
-        content = "Employee,Qualifying\nAlice,Yes\nAlice,Yes\nBob,No\n"
+        content = (
+            f"{self._HEADERS}\n"
+            "Alice,RR-001,Agentforce,Assigned,10/06/2024,,345,Yes,Yes,Yes,Yes,Yes\n"
+            "Alice,RR-002,Agentforce,Closed,11/01/2024,,200,Yes,Yes,Yes,Yes,Yes\n"
+            "Bob,RR-003,Copado,Assigned,10/06/2024,,345,No,Yes,Yes,Yes,No\n"
+        )
         f = tmp_path / "rrs.csv"
         f.write_text(content)
         result = vsr.load_agentforce_rrs(f)
@@ -391,7 +399,11 @@ class TestLoadAgentforceRrs:
         assert result is None
 
     def test_all_qualifying_no(self, tmp_path):
-        content = "Employee,Qualifying\nAlice,No\nBob,No\n"
+        content = (
+            f"{self._HEADERS}\n"
+            "Alice,RR-001,Copado,Assigned,10/06/2024,,345,No,Yes,Yes,Yes,No\n"
+            "Bob,RR-002,Copado,Assigned,10/06/2024,,345,No,Yes,Yes,Yes,No\n"
+        )
         f = tmp_path / "rrs.csv"
         f.write_text(content)
         result = vsr.load_agentforce_rrs(f)
@@ -737,6 +749,7 @@ class TestValidateRecord:
 
     def test_ok_result_when_no_issues(self, monkeypatch, minimal_catalog, minimal_agentforce, minimal_devops, certs_with_af_specialist):
         monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset({"Alice Test"}))
         row = self._row("Agentforce Operations", "3- Advanced")
         result = vsr.validate_record(row, minimal_catalog, minimal_agentforce, minimal_devops,
                                      certs_with_af_specialist, rr_counts={"Alice Test": 3})
@@ -989,3 +1002,198 @@ class TestValidateRecordEdgeCases:
         )
         assert "4-Specialist" in result.get("AF Level Definition", "")
         assert "Criteria 4 text" in result.get("AF Level Definition", "")
+
+
+# ---------------------------------------------------------------------------
+# load_af_enabled()
+# ---------------------------------------------------------------------------
+
+class TestLoadAfEnabled:
+    def test_loads_yes_employees(self, tmp_path):
+        f = tmp_path / "team_roster.csv"
+        f.write_text("Employee,Grade,AF Enabled\nAlice,Grade 7,Yes\nBob,Grade 5,No\n")
+        result = vsr.load_af_enabled(f)
+        assert "Alice" in result
+        assert "Bob" not in result
+
+    def test_empty_if_no_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(vsr, "DOWNLOADS", tmp_path)
+        result = vsr.load_af_enabled(tmp_path / "nonexistent.csv")
+        assert result == frozenset()
+
+    def test_case_insensitive_yes(self, tmp_path):
+        f = tmp_path / "team_roster.csv"
+        f.write_text("Employee,Grade,AF Enabled\nAlice,Grade 7,YES\n")
+        result = vsr.load_af_enabled(f)
+        assert "Alice" in result
+
+
+# ---------------------------------------------------------------------------
+# _is_af_ready_skill() and _is_af_expert_only_skill()
+# ---------------------------------------------------------------------------
+
+class TestIsAfReadySkill:
+    def test_agentforce_delivery_is_ready(self):
+        assert vsr._is_af_ready_skill("Agentforce Delivery")
+
+    def test_flow_is_ready(self):
+        assert vsr._is_af_ready_skill("Flow")
+
+    def test_agentforce_testing_is_ready(self):
+        assert vsr._is_af_ready_skill("Agentforce Testing")
+
+    def test_agent_performance_not_ready(self):
+        assert not vsr._is_af_ready_skill("Agent Performance Tracking and Optimization")
+
+    def test_agentic_delivery_not_ready(self):
+        assert not vsr._is_af_ready_skill("Agentic Delivery")
+
+    def test_ai_ecosystem_not_ready(self):
+        assert not vsr._is_af_ready_skill("AI Ecosystem and Frameworks")
+
+
+class TestIsAfExpertOnlySkill:
+    def test_agent_performance_is_expert_only(self):
+        assert vsr._is_af_expert_only_skill("Agent Performance Tracking and Optimization")
+
+    def test_agentic_delivery_is_expert_only(self):
+        assert vsr._is_af_expert_only_skill("Agentic Delivery")
+
+    def test_agentforce_delivery_not_expert_only(self):
+        assert not vsr._is_af_expert_only_skill("Agentforce Delivery")
+
+    def test_agentforce_testing_not_expert_only(self):
+        assert not vsr._is_af_expert_only_skill("Agentforce Testing")
+
+
+# ---------------------------------------------------------------------------
+# load_agentforce_rrs() — Python-enforced criteria
+# ---------------------------------------------------------------------------
+
+class TestLoadAgentforceRrsFiltering:
+    _HEADERS = ("Employee,RR Name,Primary Skill,Status,Start Date,End Date,"
+                "Duration Days,AF Skill,Post GA,Active Status,Long Enough,Qualifying")
+
+    def _make_rr_csv(self, tmp_path, rows):
+        lines = [self._HEADERS] + rows
+        f = tmp_path / "rr.csv"
+        f.write_text("\n".join(lines) + "\n")
+        return f
+
+    def test_qualifying_rr_counted(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Agentforce,Assigned,10/6/2024,,345,Yes,Yes,Yes,Yes,Yes"
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result["Alice"] == 1
+
+    def test_pre_ga_rr_excluded(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Agentforce,Assigned,9/1/2024,,345,Yes,No,Yes,Yes,No"
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result.get("Alice", 0) == 0
+
+    def test_non_af_skill_excluded(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Copado,Assigned,10/6/2024,,345,No,Yes,Yes,Yes,No"
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result.get("Alice", 0) == 0
+
+    def test_short_duration_excluded(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Agentforce,Assigned,10/6/2024,,30,Yes,Yes,Yes,No,No"
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result.get("Alice", 0) == 0
+
+    def test_inactive_status_excluded(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Agentforce,Cancelled,10/6/2024,,345,Yes,Yes,No,Yes,No"
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result.get("Alice", 0) == 0
+
+    def test_multiple_qualifying_counted(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Agentforce,Assigned,10/6/2024,,345,Yes,Yes,Yes,Yes,Yes",
+            "Alice,RR-002,Agentforce,Closed,11/1/2024,,200,Yes,Yes,Yes,Yes,Yes",
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result["Alice"] == 2
+
+    def test_invalid_date_skipped(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Agentforce,Assigned,not-a-date,,345,Yes,Yes,Yes,Yes,No"
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result.get("Alice", 0) == 0
+
+    def test_in_progress_status_qualifies(self, tmp_path):
+        f = self._make_rr_csv(tmp_path, [
+            "Alice,RR-001,Agentforce,In Progress,10/6/2024,,345,Yes,Yes,Yes,Yes,Yes"
+        ])
+        result = vsr.load_agentforce_rrs(f)
+        assert result["Alice"] == 1
+
+
+# ---------------------------------------------------------------------------
+# validate_record() — AF Enabled and skill-tier fields
+# ---------------------------------------------------------------------------
+
+class TestValidateRecordAfEnabled:
+    def test_af_not_enabled_note_added_at_3plus(self, monkeypatch, minimal_catalog,
+                                                minimal_agentforce, minimal_devops,
+                                                certs_with_af_specialist):
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset())
+        row = {"Resource": "Alice Test", "Skill or Certification": "Agentforce Operations",
+               "Rating": "3- Advanced", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, certs_with_af_specialist)
+        assert "AF NOT ENABLED" in result["Validation Notes"]
+        assert result["AF Enabled"] == "No"
+
+    def test_af_enabled_no_not_enabled_note(self, monkeypatch, minimal_catalog,
+                                            minimal_agentforce, minimal_devops,
+                                            certs_with_af_specialist):
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset({"Alice Test"}))
+        row = {"Resource": "Alice Test", "Skill or Certification": "Agentforce Operations",
+               "Rating": "3- Advanced", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, certs_with_af_specialist)
+        assert "AF NOT ENABLED" not in result.get("Validation Notes", "")
+        assert result["AF Enabled"] == "Yes"
+
+    def test_af_not_enabled_below_3_no_note(self, monkeypatch, minimal_catalog,
+                                            minimal_agentforce, minimal_devops):
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset())
+        row = {"Resource": "Alice Test", "Skill or Certification": "Agentforce Operations",
+               "Rating": "2- Intermediate", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, {})
+        assert "AF NOT ENABLED" not in result.get("Validation Notes", "")
+
+    def test_af_ready_skill_field_populated(self, monkeypatch, minimal_catalog,
+                                            minimal_agentforce, minimal_devops):
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset())
+        row = {"Resource": "Alice Test", "Skill or Certification": "Agentforce Testing",
+               "Rating": "2- Intermediate", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, {})
+        assert result["AF Ready Skill"] != ""
+
+    def test_non_af_skill_fields_empty(self, monkeypatch, minimal_catalog,
+                                       minimal_agentforce, minimal_devops):
+        monkeypatch.setattr(vsr, "EMPLOYEE_GRADES", {"Alice Test": "Grade 7"})
+        monkeypatch.setattr(vsr, "AF_ENABLED_EMPLOYEES", frozenset())
+        row = {"Resource": "Alice Test", "Skill or Certification": "Environment/Sandbox Management",
+               "Rating": "3- Advanced", "Evaluation Date": "08/01/2025"}
+        result = vsr.validate_record(row, minimal_catalog, minimal_agentforce,
+                                     minimal_devops, {})
+        assert result["AF Ready Skill"] == ""
+        assert result["AF Enabled"] == ""
