@@ -52,6 +52,33 @@ class TestPreDisposition:
         notes = "AGENTFORCE: Rating below minimum. | JUSTIFICATION REQUIRED: ..."
         assert gen._pre_disposition(notes) == "Change Required"
 
+    def test_af_not_enabled_only_returns_approve(self):
+        # Regression: AF NOT ENABLED is informational. When it is the only flag
+        # the rating is otherwise justified (certs + RRs pass all gates), so the
+        # record should be Approve (green), not Discuss (yellow).
+        notes = (
+            "AF NOT ENABLED: Craig Scott has not completed AF Enabled requirements "
+            "(Agentforce Champion, Innovator, and Legend Trailhead superbadges + "
+            "Salesforce Certified Data Cloud / Data 360 Consultant cert). "
+            "AF skill ratings cannot count toward Agentforce Ready status until "
+            "enablement is complete."
+        )
+        assert gen._pre_disposition(notes) == "Approve"
+
+    def test_af_not_enabled_plus_agentforce_returns_change_required(self):
+        notes = (
+            "AF NOT ENABLED: Craig Scott has not completed AF Enabled requirements... | "
+            "AGENTFORCE: Rating below minimum."
+        )
+        assert gen._pre_disposition(notes) == "Change Required"
+
+    def test_af_not_enabled_plus_cert_returns_discuss(self):
+        notes = (
+            "AF NOT ENABLED: Craig Scott has not completed AF Enabled requirements... | "
+            "CERT: Self-rated 4-Specialist but no cert corroborates."
+        )
+        assert gen._pre_disposition(notes) == "Discuss"
+
 
 # ---------------------------------------------------------------------------
 # _summarize_notes()

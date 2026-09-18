@@ -134,7 +134,7 @@ def _row_fill(status):
 def _pre_disposition(notes: str) -> str:
     """
     Classify each record for the manager tracker:
-      Approve        — no issues found
+      Approve        — no issues found, OR only informational AF enablement notes
       Discuss        — flagged for cert or catalog mismatch only (low stakes)
       Change Required — below Agentforce minimum, below grade floor, Tier 1 cert missing,
                         or Tier 2 grade ceiling exceeded
@@ -143,6 +143,11 @@ def _pre_disposition(notes: str) -> str:
         return "Approve"
     if "AGENTFORCE:" in notes or "DEVOPS:" in notes or "TIER2:" in notes:
         return "Change Required"
+    # AF NOT ENABLED is purely informational — the rating itself may be fully justified
+    # by cert and RR evidence. Only escalate to Discuss when other issues are also present.
+    parts = [p.strip() for p in notes.split("|") if p.strip()]
+    if all(p.startswith("AF NOT ENABLED:") for p in parts):
+        return "Approve"
     return "Discuss"
 
 
