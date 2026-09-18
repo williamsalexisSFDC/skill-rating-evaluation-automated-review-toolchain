@@ -3,7 +3,7 @@
 **Author:** Alexis Williams, Senior Manager Technical Consulting
 **Scope:** Direct report team (5 ICs, Grades 5–7)
 **Cycle:** FY26 Annual Skill & Certification Rating Review
-**Last updated:** 2026-09-18 — Iteration 4: Environment/Sandbox Management cert hierarchy implemented (PDLDA primary, Advanced Admin secondary, Copado I/II supplementary); CERT_DOMAIN_MAP expanded to recognize Copado and Advanced Admin as corroborating certs for this skill; justification gate added at 3-Advanced.
+**Last updated:** 2026-09-18 — Iteration 7: `mass_approve_skills.py` added — two-pass Playwright automation (en-masse approve + individual reject with Discussion Notes) against the org62 Mass Approve Skills and Certification page; uses Bryntum shadow DOM grid interaction pattern consistent with `scrape_skill_ratings.py`.
 
 ---
 
@@ -34,6 +34,7 @@ The toolchain automates the three most labor-intensive phases of the review:
 | Data extraction | Navigating org62 RR records per employee (15–30 min/person) | `scrape_agentforce_resource_requests.py` via MCP Playwright |
 | Validation | Reviewing 148+ records against 6 distinct rule sets | `validate_skill_ratings.py` |
 | Artifact generation | Building review spreadsheets, per-person tabs, manager tracker | `generate_review_artifacts.py` |
+| Disposition | Selecting and approving/rejecting 148 records one-by-one in org62 Mass Approve | `mass_approve_skills.py` via Playwright |
 
 **Estimated time savings:** Manual review at ~3–5 minutes per record across 150 records = 7–12 hours. Toolchain runtime = under 15 minutes including browser scraping.
 
@@ -184,6 +185,28 @@ Applies six rule sets to each of the 148+ skill rating records, implementing the
 7. **Grade floor check** — verifies rating meets the DevOps Leveling Guide minimum for the employee's grade
 8. **Justification-required skills** — flags Observability, Configuration Management, Containerization, and Environment/Sandbox Management at 3+; each has a distinct qualification bar where surface-level exposure is commonly conflated with hands-on implementation depth
 9. **4-Specialist cert corroboration** — flags any 4-Specialist claim without any corroborating cert on file
+
+### `mass_approve_skills.py`
+
+Reads the **Manager Tracker CSV export** (`skill_rating_review.xlsx - Manager Tracker.csv`) and executes both disposition passes against the org62 Mass Approve Skills and Certification page using Playwright's bundled Chromium. This script bypasses the enterprise Chrome DevTools policy restriction by using Playwright's own Chromium rather than the system browser.
+
+**Pass 1 — En-masse approval:** Selects all rows whose `Final Action` column is `Approve` by record ID, then clicks the page-level Approve button once and enters the standard comment:
+> "Reviewed and approved by PL, Alexis Williams."
+
+**Pass 2 — Individual rejection:** For each row whose `Final Action` is `Reject`, selects that row alone, clicks Reject, and populates the Comments textarea with the row's `Discussion Notes` value from the CSV (max 4000 characters — the Salesforce field limit).
+
+**Shadow DOM interaction:** The Mass Approve page renders its record table inside a Bryntum grid component hosted by `c-bryntum-widget-host`. All row selection is performed via JavaScript evaluation that traverses the shadow root — the same pattern used by `scrape_skill_ratings.py`. Grid rows are matched by the Salesforce record ID stored in `data-id` on each `.b-grid-row` element.
+
+**Button and modal selectors:**
+- Top-level Approve/Reject buttons: `page.get_by_role("button", name=label).first`
+- Comments textarea: `modal.locator("textarea.slds-textarea")` — the `id` attribute is dynamic; `slds-textarea` class is stable
+- Modal confirm button: `page.locator("button[title='Approve/Reject Skill or Certification Rating']")` — `title` is stable and unique, guards against colliding with the same-text header buttons
+
+**Outputs:**
+- `mass_approve_results.json` — records attempted count, succeeded count, and any missing record IDs (rows from the CSV not found on the page) for approvals; per-row status (success / skipped / failed) for rejections
+- `debug_*.png` screenshots saved to the repo directory on grid timeout or no-rows condition
+
+**Run:** `python3 mass_approve_skills.py` — a browser window opens, you log in to org62, then press ENTER to proceed with the automated passes.
 
 ### `generate_review_artifacts.py`
 
@@ -468,6 +491,12 @@ python3 validate_skill_ratings.py
 
 # Step 4 — generate the review XLSX workbook
 python3 generate_review_artifacts.py
+
+# Step 5 — after 1:1s and dispositions are recorded in the Manager Tracker CSV export:
+#   Export the Manager Tracker sheet as CSV to ~/Downloads/
+#   (File → Download → CSV for the Manager Tracker tab)
+#   Then run the mass disposition script:
+python3 mass_approve_skills.py
 ```
 
 **After generating the XLSX:**
@@ -478,7 +507,10 @@ python3 generate_review_artifacts.py
 4. Employees fill in column L (justification) and column M (proposed change)
 5. Manager Tracker column M auto-populates with each employee's proposed change via VLOOKUP
 6. Hold 1:1 discussions for red-highlighted rows; record agreed rating in column N and final action in column O
-7. Use Manager Tracker as reference for org62 Mass Approve / Change workflow
+7. Record `Approve` or `Reject` in column O (Final Action) for every row in the Manager Tracker
+8. Export the Manager Tracker tab as CSV to `~/Downloads/skill_rating_review.xlsx - Manager Tracker.csv`
+9. Run `python3 mass_approve_skills.py` — logs in to org62, approves all approved records en masse, rejects each flagged record individually with the Discussion Notes as the rejection comment
+10. Review `mass_approve_results.json` for any rows that were not found on the page (may have already been actioned or filtered)
 
 **Re-run cadence:** Re-run `scrape_skill_ratings.py` before each review cycle to pick up newly submitted records. Re-run `scrape_agentforce_resource_requests.py` whenever an employee completes a new Agentforce engagement, to refresh the Tier 3 RR evidence baseline.
 
@@ -492,3 +524,6 @@ python3 generate_review_artifacts.py
 | 2026-09-17 | v2 | Data 360 cert gate added: Agentforce Specialist excluded from corroborating Data 360/Data Cloud skills. Only Data Cloud Consultant cert qualifies. AF Enabled status corrected: Ramandeep Kaur is the only direct report with both Agentforce Specialist + Data Cloud Consultant certs. Craig Scott is NOT AF Enabled. |
 | 2026-09-18 | v3 | Full 3-tier framework implemented: Tier 1 cert gate at 3-Advanced (Flag 2a), Tier 2 grade ceiling (Flag 2c). CERT_DOMAIN_MAP expanded to correctly cover "action planning", "design and configure", "build and deploy" under Agentforce Specialist; "flow" added to Platform Administrator domain. _pre_disposition and _summarize_notes updated for TIER2: flag prefix. README updated to document full framework, bio evidence sources, AF Enabled table, iteration log. |
 | 2026-09-18 | v4 | Environment/Sandbox Management cert hierarchy added (Flag 3e). CERT_DOMAIN_MAP updated: Copado Fundamentals I/II now corroborates environment/sandbox skills; new "advanced administrator" entry added covering environment, sandbox, configuration, and release management keywords. CERT_RECOMMENDATIONS "environment" entry expanded to full cert path (PDLDA primary, Advanced Admin secondary, Copado I/II supplementary, Platform Admin baseline-only). Justification gate added to _JUSTIFICATION_REQUIRED_SKILLS at 3-Advanced with evidence criteria, qualifying vs. non-qualifying examples, and cert path. |
+| 2026-09-18 | v5 | `mass_approve_skills.py` added — initial Playwright automation for org62 Mass Approve page. Two-pass design: en-masse approve with standard PL comment; individual reject with Discussion Notes from Manager Tracker CSV. 37 pytest unit tests, 99% coverage. CI updated to include playwright in pip install and mass_approve_skills in coverage gate. |
+| 2026-09-18 | v6 | `mass_approve_skills.py` rewritten to use Bryntum shadow DOM grid interaction. The Mass Approve page renders via `c-bryntum-widget-host` — not a standard HTML table — so all row selection uses JavaScript evaluation traversing the shadow root (same pattern as `scrape_skill_ratings.py`). `wait_for_grid` uses `wait_for_function` with shadow-piercing JS. `select_rows_by_ids` scrolls the virtual grid and clicks `ma_selection-column` cells by record ID. Tests updated: 45 tests, 98% coverage. |
+| 2026-09-18 | v7 | Fixed modal textarea and confirm button selectors in `mass_approve_skills.py`. Textarea `id` is dynamic — replaced `get_by_label("Comments")` with `modal.locator("textarea.slds-textarea")`. Confirm button matched by `title` attribute (`"Approve/Reject Skill or Certification Rating"`) instead of role/name to avoid collision with same-text header buttons. Verified against actual DOM from live page. |
