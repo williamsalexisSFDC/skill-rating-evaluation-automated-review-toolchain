@@ -670,14 +670,16 @@ CERT_RECOMMENDATIONS = {
     "architecture":             ("Salesforce Certified Application Architect "
                                  "(System Architect + Domain credentials combined)",
                                  "Validates enterprise architectural judgment across the full platform."),
-    "platform strategy":        ("Baseline: PDLDA. 4-Specialist: PDLDA + Platform Data Architect OR "
-                                 "PDLDA + Sharing and Visibility Architect. "
-                                 "5-Expert: PDLDA + both, or PDLDA + Application Architect.",
-                                 "PDLDA is a baseline; architectural depth certs are required for 4+."),
-    "org or platform":          ("Baseline: PDLDA. 4-Specialist: PDLDA + Platform Data Architect OR "
-                                 "PDLDA + Sharing and Visibility Architect. "
-                                 "5-Expert: PDLDA + both, or PDLDA + Application Architect.",
-                                 "PDLDA is a baseline; architectural depth certs are required for 4+."),
+    "platform strategy":        ("3-Advanced: PDLDA. "
+                                 "4-Expert: PDLDA + Platform Data Architect, "
+                                 "PDLDA + Sharing and Visibility Architect, "
+                                 "or PDLDA + Application Architect.",
+                                 "PDLDA is the baseline for 3-Advanced; architectural depth certs are required for 4-Expert."),
+    "org or platform":          ("3-Advanced: PDLDA. "
+                                 "4-Expert: PDLDA + Platform Data Architect, "
+                                 "PDLDA + Sharing and Visibility Architect, "
+                                 "or PDLDA + Application Architect.",
+                                 "PDLDA is the baseline for 3-Advanced; architectural depth certs are required for 4-Expert."),
     "org assessment":           ("Salesforce Certified Application Architect (requires Platform Data Architect + "
                                  "Sharing and Visibility Architect as components)",
                                  "Includes evaluation of org health, technical debt, and fit-for-purpose design."),

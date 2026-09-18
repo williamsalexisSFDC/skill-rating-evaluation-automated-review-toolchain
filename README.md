@@ -119,8 +119,8 @@ These skills reflect organizational seniority and client-facing advisory depth �
 | Grade 4 | 2-Intermediate | Associate level — early commercial exposure |
 | Grade 5 | 3-Advanced | Consultant — demonstrates acumen, not yet architecting client strategy |
 | Grade 6 | 3-Advanced | Senior Consultant — breadth of delivery, not yet executive advisory |
-| Grade 7 | 4-Specialist | Architect — direct executive-level client advisory track record required |
-| Grade 8+ | 4-Specialist / 5-Expert | Senior Architect, Director, VP |
+| Grade 7 | 4-Expert | Architect — direct executive-level client advisory track record required |
+| Grade 8+ | 4-Expert | Senior Architect, Director, VP |
 
 **About Me / Bio as evidence:** Each employee has an `aboutMeText` field on their org62 User profile (1000 character textarea) and an enterprise bio used in RR submissions. These are the authoritative sources for bio-based Tier 2 evidence. The manager should review these alongside the grade ceiling during 1:1 discussions for any Tier 2 skill rated at or near the grade ceiling. Key evidence to look for: client industry/type (commercial enterprise vs. public sector), scope of advisory engagement (executive sponsors, ARB presence, business case authorship), team leadership, and tenure.
 
