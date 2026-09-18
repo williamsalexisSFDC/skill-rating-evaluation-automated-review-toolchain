@@ -1,0 +1,156 @@
+Validated Rating of 3+ in All Skills ,,"Skill Rating Descriptions. 
+Provided for Skill Rating 3 and 4. For further support, see the Skills Ratings Guidance. ",,
+,,,,
+Skill Name,Definition,3 - Advanced - Applied Theory,4 - Specialist Go-to-Person,5 - Expert Recognized Authority
+Build and Deploy Technical Capabilities,Demonstrates ability to successfully complete the end-to-end process of taking a technical concept from proof of concept/technology to design and development of a fully functional and operational solution that delivers tangible value.  ,"I apply practical expertise in building and deploying technical capabilities that move beyond proof of concept into production-ready solutions.
+I contribute to the design, development, and delivery of scalable architectures that meet defined business and technical requirements.
+I collaborate effectively across cross-functional teams to validate designs, troubleshoot issues, and ensure successful implementation of new features or integrations.
+I translate technical designs into functional deployments that demonstrate measurable impact and operational readiness for customer use.","I lead the end-to-end design and deployment of complex technical solutions, guiding teams from concept through production implementation.
+I serve as a trusted technical advisor, architecting scalable, resilient systems that deliver measurable value and align with customer strategy and technical roadmaps.
+I establish best practices for build, deployment, and release management processes, ensuring consistency, quality, and governance across projects.
+I mentor others in applying architectural principles and deployment patterns, driving technical excellence and innovation in solution delivery.",
+Development Lifecycle Frameworks,Apply Analytics Development Lifecycle (ADLC) and Software Development Lifecycle (SDLC) best practices to continuously reinforce ways of working and improve the quality of projects.,"I apply ADLC and SDLC principles to manage project workflows, ensuring solutions are developed with quality, efficiency, and alignment to business objectives.
+I contribute to planning, design, implementation, and testing phases, helping teams apply structured processes to achieve reliable and maintainable outcomes.
+I identify areas for process improvement and implement lifecycle best practices to enhance project delivery and reduce risks.
+I translate lifecycle methodologies into actionable steps for the team, ensuring adherence to standards while supporting iterative development and agile delivery.","I lead teams in applying ADLC and SDLC frameworks across complex projects, ensuring best practices are consistently implemented throughout the development lifecycle.
+I define and evolve governance and workflow strategies that align with organizational standards and project objectives.
+I provide expert guidance to teams on process optimization, quality assurance, and risk management, reinforcing ways of working and improving project outcomes.
+I communicate lifecycle expectations clearly to technical and non-technical stakeholders, fostering disciplined development practices and ensuring sustainable, high-quality deliverables.",
+Retrieval Augmented Generation,Understands how Retrieval Augmented Generation works and the use of Vector Databases. Utilizes RAG techniques and vector databases to enhance knowledge accuracy and response relevance.,"I apply practical expertise in designing and implementing Retrieval Augmented Generation solutions that leverage unstructured and structured data to improve AI accuracy and relevance.
+I have contributed to customer-facing implementations or extended existing RAG-enabled solutions, demonstrating the ability to apply advanced RAG patterns to real-world use cases.
+I utilize Data 360 or similar data sources to connect and optimize retrieval pipelines, ensuring that retrieved information aligns with model behavior and business objectives.
+I translate RAG concepts into actionable testing and deployment strategies, helping teams move beyond proof-of-concept into scalable, production-ready solutions.","I serve as the design lead or lead architect for customer-facing RAG implementations, demonstrating deep technical expertise and solution ownership.
+I design and deploy RAG architectures that go beyond standard retrievers or prompt templates, tailoring retrieval and orchestration methods to specific business and data contexts.
+I guide teams in implementing scalable, efficient, and explainable RAG pipelines that integrate seamlessly with broader AI and data ecosystems.
+I provide thought leadership and mentorship across projects, ensuring technical excellence and innovation in RAG delivery.",
+Design and Configure Solutions,Ability to translate client requirements into a well designed solution using a deep knowledge of Salesforce's cloud specific capabilities and design best practices.,"I translate client requirements into robust Salesforce solutions using a combination of declarative configuration and basic programmatic capabilities.
+I design solutions that consider scalability, maintainability, and alignment with Salesforce best practices.
+I collaborate with cross-functional teams to validate designs, troubleshoot issues, and ensure solutions deliver intended business value.
+I proactively identify optimization opportunities and apply design principles to improve user experience and adoption.","I lead the design and configuration of complex Salesforce solutions, guiding teams in translating client requirements into highly functional architectures.
+I provide deep expertise in Salesforce cloud specific capabilities, designing solutions that are scalable, secure, and aligned with enterprise architecture principles.
+I define best practices, governance, and design standards, mentoring others to ensure consistency, quality, and adherence to design frameworks.
+I communicate solution options, trade-offs, and best-in-class guidance to clients, enabling informed decisions and high adoption.",
+Conversation Design,"Apply conversation design methods (encompassing voice user interface, interaction, visual, motion, audio, service, design thinking, and UX writing) to create detailed specifications, patterns, guidance and instructions that outline the flow and logic for Agentic/Human experiences, ensuring a linguistic/NLP based approach while considering both user needs and technological limitations.","I apply conversation design methods to develop detailed specifications and interaction flows that guide agentic and human experiences.
+I integrate linguistic, NLP, and UX principles to ensure dialogues are coherent, contextually relevant, and aligned with user needs.
+I evaluate conversation patterns through iterative testing, providing actionable recommendations to improve flow, engagement, and comprehension.
+I collaborate with cross-functional teams to translate design concepts into implementable solutions while considering technological constraints.","I lead the creation of complex conversation designs for agentic systems, combining advanced VUI, UX, NLP, and design thinking expertise.
+I define and implement standards, templates, and best practices for conversation design, ensuring scalable, high-quality dialogue patterns across multiple projects.
+I guide teams and stakeholders in understanding design trade-offs, technological limitations, and user-centered approaches.
+I serve as a trusted advisor, providing expertise on advanced linguistic and interaction strategies that optimize agent-human engagement and overall user experience.",
+Prompt Engineering,"Demonstrates advanced English language skills for creating precise, context-aware prompts that optimize Generative AI performance in Agentforce. Includes crafting prompts that elicit desired responses and iteratively refining them.","I apply practical expertise in designing, testing, and refining prompts to optimize Generative AI outputs within Agentforce.
+I understand how prompt structure, tone, and context influence model responses and use this knowledge to elicit consistent and accurate results.
+I iteratively evaluate AI outputs, identify areas for improvement, and adjust phrasing, sequencing, or constraints to achieve desired outcomes.
+I collaborate with technical and customer teams to align prompt strategies with user intent and business objectives, ensuring reliable agent performance.","I lead the design and optimization of complex prompt architectures, applying advanced linguistic, contextual, and interaction design techniques to enhance AI performance.
+I establish and communicate best practices for prompt construction, testing, and refinement across teams and projects.
+I mentor others in identifying patterns in model behavior, managing variability, and developing reusable prompt frameworks for scalable agent design.
+I collaborate with product and engineering teams to continuously improve prompt strategies and model alignment, ensuring high-quality, contextually aware agent experiences.",
+Prompt Builder,"Shows expertise and understanding on how to create, test, revise, customize, and manage prompt templates that incorporate CRM data from merge fields, flows, related lists, and Apex.","I apply practical expertise in building, testing, and refining prompt templates that dynamically incorporate CRM data.
+I understand how to connect and use merge fields, flows, related lists, and Apex to tailor prompts for specific business and user contexts.
+I collaborate with cross-functional teams to validate prompt behavior, troubleshoot issues, and ensure outputs align with intended business logic and user experience.
+I iteratively refine templates based on testing and feedback, improving accuracy, personalization, and reliability of AI-generated responses.","I lead the design, customization, and optimization of advanced prompt templates, integrating complex CRM data structures to drive contextual and accurate agent responses.
+I define and implement best practices for managing prompt templates, version control, and testing across multiple use cases and environments.
+I mentor others on incorporating dynamic data through merge fields, flows, related lists, and Apex, ensuring solutions are scalable and aligned with system architecture.
+I serve as a trusted advisor to project teams and customers, guiding design choices that balance performance, maintainability, and business impact.",
+Agentforce Delivery,"Translates complex business needs to design and deliver a complete, end-to-end Agentforce implementation. This includes configuring topics, instructions, actions, and any necessary data integrations, followed by deployment within a designated channel. Creates effective technical documentation to ensure customers can self-sustain their Agentforce implementation.","I apply practical expertise in designing and delivering Agentforce implementations that translate customer requirements into fully functional, end-to-end solutions.
+I configure topics, instructions, and actions, and integrate relevant data sources to ensure reliable performance and alignment with business outcomes.
+I contribute to deployment activities within designated channels, validating that solutions operate as intended and deliver measurable value.
+I create clear technical documentation and implementation guides that support customer understanding and long-term sustainability.","I lead the design and delivery of complex Agentforce implementations, translating business needs into scalable, production-ready solutions.
+I architect and oversee the configuration of topics, instructions, actions, and integrations, ensuring alignment with enterprise data structures and customer goals.
+I establish and communicate best practices for deployment, governance, and optimization across multiple engagements.
+I develop and maintain comprehensive documentation and training materials that enable customers to self-sustain and evolve their Agentforce solutions independently.",
+Agentforce Testing,"Demonstrates expertise in systematically testing Agentforce deployments, ensuring reliability, performance, and alignment with business objectives. ","I independently design and execute structured testing using Agentforce Testing Center and similar tools.
+I translate technical outcomes into actionable, testable scenarios that support business objectives.
+I lead quality validation activities on projects, ensuring testing rigor and clarity of communication between development and customer teams.
+I consistently define and apply testing strategies that address the non-deterministic behavior of agents, ensuring consistent performance and reliability.","I am a recognized expert in Agentforce Testing Center, leading teams in developing comprehensive testing and validation frameworks.
+I communicate the “what, why, and how” of testing progress clearly to both technical and non-technical stakeholders.
+I provide expert guidance to project teams, ensuring that test results drive continuous improvements in agent quality and customer outcomes.
+I establish and uphold testing standards that account for the unique, evolving behavior of intelligent agents.","I am a strategic authority in Agentforce testing, shaping testing methodologies and best practices across teams and engagements.
+I design and direct enterprise-level testing strategies that ensure reliability, performance, and adaptability of agent-based solutions.
+I expertly assess and refine prompts, agent interactions, and feedback loops to drive ongoing enhancement of the Agentforce experience.
+I influence organizational standards, guiding teams and customers in adopting agile, data-driven approaches to testing and continuous improvement of intelligent agents."
+Data 360 (aka: Data Cloud) for Agentforce,"Demonstrates a knowledge of Data 360, including set-up, configuration, data chunking, indexing, and retrieval mechanisms to optimize Agentforce implementations.","I apply practical expertise in configuring and optimizing Data 360 to ensure efficient data management and reliable performance for Agentforce solutions.
+I have hands-on experience setting up Data Cloud connections, managing data models, and applying chunking and indexing strategies to improve data retrieval.
+I collaborate with cross-functional teams to ensure that data pipelines are efficient, reliable, and aligned with business requirements.
+I interpret performance insights to refine configurations and enhance solution scalability, accuracy, and responsiveness.","I lead the design and optimization of Data 360 integrations for complex Agentforce solutions, ensuring data is structured and retrieved efficiently to meet performance and business goals.
+I architect and implement advanced data management strategies, including chunking, indexing, and retrieval optimization tailored to specific use cases.
+I define best practices for Data 360 configuration, governance, and maintenance, ensuring data quality and alignment with broader technical architectures.
+I provide guidance and mentorship to teams and customers, enabling them to leverage Data Cloud capabilities to maximize solution performance and reliability.",
+Flow,Expertise in Salesforce Flow. A flow is an application built by your administrator that asks you for inputs and does something in Salesforce based on those inputs.,"I apply practical expertise in designing, building, and optimizing Salesforce Flows to automate business processes and improve operational efficiency.
+I create multi-step flows that collect inputs, perform logic, and trigger actions, ensuring alignment with business requirements and system constraints.
+I troubleshoot flow errors, optimize performance, and iterate designs based on feedback from users and stakeholders.
+I collaborate with teams to integrate Flows with other Salesforce functionality, supporting end-to-end solution delivery and improved user experience.","I lead the design, deployment, and optimization of complex Salesforce Flows, ensuring they meet strategic business objectives and scale across the organization.
+I establish best practices for flow architecture, error handling, and performance optimization, guiding others to build maintainable and efficient solutions.
+I mentor teams on designing and implementing flows, providing governance, standards, and design guidance.
+I advise stakeholders on how to leverage Flow strategically to automate processes, improve adoption, and deliver measurable business value.",
+AI Consulting,"Demonstrates understanding of how to leverage Artificial Intelligence technologies and the differences between them, with a particular focus on Generative AI, Predictive AI, Machine Learning, Analytics and AgentForce. Engages with stakeholders to explain complex AI concepts, terminology, frameworks, and Agentforce positioning. Advises on opportunities, risks, and strategic applications.","I apply practical expertise in leveraging AI technologies to address business challenges, understanding differences between Generative AI, Predictive AI, Machine Learning, Analytics, and Agentforce.
+I contribute to client engagements by analyzing opportunities and recommending AI-driven solutions that align with business objectives.
+I communicate complex AI concepts and frameworks in clear, actionable ways for technical and non-technical stakeholders.
+I evaluate performance, feasibility, and risks of AI initiatives, providing insights to guide development and deployment strategies.","I lead AI consulting engagements, advising clients on strategic applications of Generative AI, Predictive AI, Machine Learning, Analytics, and Agentforce.
+I translate complex AI concepts, terminology, and frameworks into clear guidance that supports decision-making and business strategy.
+I define and communicate best practices, governance approaches, and risk mitigation strategies for AI implementations.
+I mentor teams and stakeholders, helping them identify, design, and implement AI solutions that maximize value, adoption, and impact.",
+Action Planning,"Ability to prioritize and plan activities, tasks and deliverables that drive tangible, quantifiable value.  Experience defining problem statements, target outcomes, actions, dependencies, what success looks like and the definition of done.","I apply practical expertise in defining problem statements, target outcomes, and the steps required to achieve them.
+I create actionable plans that identify dependencies, prioritize tasks, and establish clear definitions of success and done.
+I monitor progress, adjust plans based on insights or changing conditions, and ensure alignment with business objectives.
+I collaborate with teams to translate strategic goals into structured activities that deliver measurable outcomes.","I lead the development of comprehensive action plans for complex initiatives, ensuring clarity, alignment, and measurable impact.
+I define and communicate dependencies, priorities, and success criteria, guiding teams to deliver high-quality results efficiently.
+I establish frameworks and best practices for action planning that others can follow, reinforcing consistent ways of working.
+I advise stakeholders on planning trade-offs, risk mitigation, and resource allocation, ensuring initiatives deliver maximum value.",
+Demonstrate Business Acumen,"Ability to quickly understand how an organization operates and use that knowledge to effectively solve problems, make decisions and positively impact the organization and its employees.","I apply practical expertise in understanding organizational operations, culture, and business drivers to make informed decisions.
+I analyze complex problems and develop solutions that balance organizational priorities, resources, and risks.
+I evaluate the potential impact of decisions on teams, processes, and outcomes, ensuring alignment with business objectives.
+I collaborate with stakeholders to translate organizational knowledge into actionable recommendations that deliver tangible results.","I lead efforts to analyze and improve organizational processes, structures, and strategies, providing expert guidance to teams and leaders.
+I identify opportunities, risks, and interdependencies across the business, informing strategic decisions and actions.
+I mentor others on applying business acumen to decision-making, problem-solving, and operational improvements.
+I influence outcomes at the organizational level by applying deep understanding of business operations to maximize impact, efficiency, and employee engagement.",
+Executive Alignment,"Establishes credibility with senior executives, developing a portfolio of c-suite connections. Identifies priorities of key decision makers and influencers to accelerate value, improve customer outcomes and uncover new opportunities for Salesforce.","I apply practical expertise in engaging with senior executives to understand their priorities, challenges, and strategic goals.
+I communicate Salesforce's value proposition clearly and credibly, aligning our solutions to measurable business outcomes.
+I build trust with executive stakeholders by delivering on commitments and translating complex information into meaningful insights.
+I contribute to strengthening executive relationships that drive adoption, satisfaction, and long-term partnership growth.","I lead strategic engagement with senior executives, earning trust through deep understanding of their business priorities and success metrics.
+I proactively align Salesforce solutions to executive agendas, positioning initiatives that drive transformation and measurable value.
+I cultivate and expand a portfolio of C-suite relationships across multiple accounts, leveraging these connections to uncover new opportunities.
+I mentor others on effective executive communication and influence, ensuring consistent alignment and advocacy at the highest levels.",
+Agility,Demonstrates ability to be flexible and adapt quickly and effectively to changes and undefined challenges,"I adapt effectively to change by remaining focused on outcomes while adjusting plans, priorities, and approaches as needed.
+I respond constructively to ambiguity, using sound judgment and collaboration to find solutions when challenges are not clearly defined.
+I balance flexibility with accountability, ensuring commitments are met even in shifting circumstances.
+I encourage others to stay open-minded and resilient in the face of change, helping teams maintain momentum and clarity.","I lead others through periods of change and uncertainty, modeling calm, focus, and adaptability.
+I anticipate potential disruptions and proactively adjust plans, resources, and communication to maintain progress and performance.
+I establish practices and mindsets that promote organizational agility, encouraging teams to pivot quickly without losing direction.
+I coach others to view change as an opportunity for innovation and improvement, strengthening team resilience and adaptability.",
+Agentforce Security,"Ensures security measures for Agentforce agents, focusing on safeguarding data, managing permissions, and compliance within Salesforce environments.","I apply practical expertise in implementing and maintaining security controls for Agentforce solutions within Salesforce.
+I manage user permissions, data access, and authentication settings to protect sensitive information and ensure compliance with organizational policies.
+I identify and address potential security risks, escalating issues and collaborating with teams to implement mitigation strategies.
+I contribute to secure solution delivery by ensuring adherence to Salesforce's security and compliance standards throughout the implementation lifecycle.","I lead the design and governance of security frameworks for Agentforce solutions, ensuring robust data protection, access control, and compliance alignment.
+I define and enforce best practices for managing permissions, authentication, and data security across environments and projects.
+I proactively assess and remediate security risks, advising stakeholders on potential impacts and corrective actions.
+I mentor teams on secure configuration, data handling, and compliance requirements, strengthening overall security posture across implementations.",
+Agent Performance Tracking and Optimization,Demonstrates ability to track performance metrics and user feedback to execute iterative improvements necessary to optimize agent performance and consumption.,"I apply practical expertise in evaluating agent performance by interpreting usage data, response accuracy, and user feedback to identify opportunities for improvement.
+I have hands-on experience on customer projects analyzing agent metrics and translating insights into clear, actionable recommendations for development teams or customers.
+I collaborate with cross-functional teams to implement iterative changes that enhance performance, efficiency, and alignment with customer objectives.
+I proactively identify trends and performance patterns that inform optimization strategies and improve overall agent effectiveness.","I lead performance tracking and optimization efforts across customer implementations, guiding teams in evaluating metrics, user feedback, and usage patterns to drive continuous improvement.
+I design and implement governance strategies and frameworks that evolve alongside the solution roadmap, ensuring data-driven decisions consistently enhance performance and adoption.
+I advise and influence stakeholders—both internal teams and customers—on performance trade-offs, optimization strategies, and best practices to maximize business impact.
+I mentor others in interpreting metrics, identifying trends, and translating insights into actionable improvements, establishing standards for performance management and iterative enhancement across projects.",
+Agentforce Troubleshooting,"Ensure quality, reliability and scalability of Agentforce implementations through rigorous testing and effective debugging.","I apply practical expertise in identifying, diagnosing, and resolving issues within Agentforce implementations to ensure stable and reliable performance.
+I conduct systematic testing and debugging, using available tools and logs to isolate problems and validate fixes.
+I interpret error patterns and performance data to provide clear, actionable insights to development and delivery teams.
+I collaborate with stakeholders to ensure timely resolution of issues and continuous improvement of implementation quality.","I lead troubleshooting efforts across complex Agentforce implementations, ensuring quality, scalability, and optimal performance.
+I design and oversee diagnostic processes, proactively identifying potential risks or performance bottlenecks before they impact delivery.
+I establish and document best practices for issue resolution, debugging, and regression testing, guiding others in applying these methods effectively.
+I communicate technical findings clearly to both technical and business stakeholders, ensuring transparency, accountability, and continuous optimization.",
+AI Ecosystem and Frameworks,"Demonstrates an understanding of the Generative AI landscape (e.g. OpenAI, Anthropic, Google, DeepSeek).
+Understands the key strengths and weaknesses of the various major LLM offerings (e.g. ChatGPT, Claude, Gemini, Grok).
+Understands the integration options across LLM providers (e.g. REST, MCP, A2E, ACP, ANP).
+Familiar with agent orchestration frameworks (e.g. LangChain, LlamaIndex).","I apply practical knowledge of the Generative AI ecosystem to design and deliver solutions that leverage leading LLMs and integration frameworks effectively.
+I understand the key differentiators, strengths, and limitations of major providers and use that knowledge to make informed technical and architectural decisions.
+I implement integrations with LLMs using available APIs or orchestration tools such as LangChain or LlamaIndex.
+I evaluate performance and alignment of model and framework choices with business and solution objectives.","I lead the design and implementation of AI solutions that strategically integrate multiple LLMs and orchestration frameworks.
+I demonstrate deep understanding of the evolving AI ecosystem, advising teams and customers on selecting and combining technologies to achieve optimal outcomes.
+I define best practices for integrating, configuring, and optimizing frameworks like LangChain or LlamaIndex to enhance scalability, accuracy, and adaptability.
+I mentor others in navigating model selection, orchestration design, and integration strategies across diverse AI platforms and providers.",
+Agentic Delivery,"Possesses a working knowledge of the AI/ML lifecycle, including model deployment, monitoring, and evaluation concepts, to better understand a customer's operational landscape.","I apply practical expertise in the AI/ML lifecycle to support the delivery of solutions that align with customer operational needs.
+I contribute to deployment, monitoring, and evaluation activities, ensuring models are effectively integrated and performing as intended.
+I interpret performance metrics and evaluation results to provide actionable insights to development and customer teams.
+I collaborate with stakeholders to translate operational context into design and delivery decisions that enhance solution reliability and impact.","I lead delivery efforts for AI/ML solutions, guiding teams in deploying, monitoring, and evaluating models to meet complex customer requirements.
+I define best practices for lifecycle management, ensuring models are reliable, maintainable, and aligned with operational goals.I advise customers and teams on optimization strategies, risk mitigation, and operational considerations throughout the AI/ML lifecycle.
+I mentor others in applying lifecycle concepts to improve solution quality, scalability, and alignment with business objectives.",
