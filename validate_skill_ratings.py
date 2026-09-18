@@ -98,7 +98,26 @@ def load_employee_grades(roster_path: Path | None = None) -> dict[str, str]:
     return _FALLBACK_EMPLOYEE_GRADES.copy()
 
 
+def load_af_enabled(roster_path: Path | None = None) -> frozenset[str]:
+    candidates: list[Path] = []
+    if roster_path:
+        candidates.append(Path(roster_path))
+    candidates.append(DOWNLOADS / "team_roster.csv")
+    for path in candidates:
+        if path.exists():
+            enabled: set[str] = set()
+            with open(path, newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    name = (row.get("Employee") or "").strip()
+                    af   = (row.get("AF Enabled") or "").strip().lower()
+                    if name and af == "yes":
+                        enabled.add(name)
+            return frozenset(enabled)
+    return frozenset()
+
+
 EMPLOYEE_GRADES: dict[str, str] = {}
+AF_ENABLED_EMPLOYEES: frozenset[str] = frozenset()
 
 
 def normalize(name: str) -> str:
@@ -248,6 +267,11 @@ def load_certifications(path: Path) -> dict:
     return dict(certs)
 
 
+_RR_GA_DATE         = datetime(2024, 10, 1)
+_RR_MIN_DAYS        = 90
+_RR_ACTIVE_STATUSES = frozenset({"assigned", "in progress", "closed", "complete"})
+
+
 def load_agentforce_rrs(path: Path):
     if not path.exists():
         return None
@@ -255,8 +279,24 @@ def load_agentforce_rrs(path: Path):
     with open(path, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             emp = row.get("Employee", "").strip()
-            if emp and row.get("Qualifying", "").strip() == "Yes":
-                counts[emp] = counts.get(emp, 0) + 1
+            if not emp:
+                continue
+            if row.get("AF Skill", "").strip().lower() != "yes":
+                continue
+            if row.get("Status", "").strip().lower() not in _RR_ACTIVE_STATUSES:
+                continue
+            try:
+                start = datetime.strptime(row.get("Start Date", "").strip(), "%m/%d/%Y")
+                if start < _RR_GA_DATE:
+                    continue
+            except ValueError:
+                continue
+            try:
+                if int(row.get("Duration Days", "0").strip()) < _RR_MIN_DAYS:
+                    continue
+            except ValueError:
+                continue
+            counts[emp] = counts.get(emp, 0) + 1
     return counts
 
 
@@ -395,6 +435,47 @@ _JUSTIFICATION_REQUIRED_SKILLS: dict[str, str] = {
         "multi-sandbox allocation model or worked primarily in a single developer sandbox."
     ),
 }
+
+# 17 skills required at 3+ for Agentforce Ready (Salesforce Readiness Definition, page 3)
+_AF_READY_SKILLS: frozenset[str] = frozenset({
+    "build and deploy technical capabilities",
+    "development lifecycle frameworks",
+    "retrieval augmented generation",
+    "design and configure solutions",
+    "conversation design",
+    "prompt engineering",
+    "prompt builder",
+    "agentforce delivery",
+    "agentforce testing",
+    "data 360 (aka: data cloud) for agentforce",
+    "data cloud for agentforce",
+    "flow",
+    "ai consulting",
+    "action planning",
+    "demonstrate business acumen",
+    "executive alignment",
+    "agility",
+    "agentforce security",
+})
+
+# 4 skills required at 3+ only for Agentforce Expert (not counted in the 17 Ready skills)
+_AF_EXPERT_ONLY_SKILLS: frozenset[str] = frozenset({
+    "agent performance tracking and optimization",
+    "agentforce troubleshooting",
+    "ai ecosystem and frameworks",
+    "agentic delivery",
+})
+
+
+def _is_af_ready_skill(skill_name: str) -> bool:
+    norm = normalize(skill_name)
+    return any(s in norm or norm in s for s in _AF_READY_SKILLS)
+
+
+def _is_af_expert_only_skill(skill_name: str) -> bool:
+    norm = normalize(skill_name)
+    return any(s in norm or norm in s for s in _AF_EXPERT_ONLY_SKILLS)
+
 
 _AF_TIER2_SKILLS = frozenset({
     "demonstrate business acumen",
@@ -736,6 +817,8 @@ def validate_record(row: dict, catalog: dict, agentforce: dict, devops: dict,
         "Supporting Cert":         supporting_cert,
         "Cert Corroborates Skill": "Yes" if has_cert else "No",
         "AF Delivery RRs":         "",
+        "AF Ready Skill":          "",
+        "AF Enabled":              "",
         "Validation Status":       "OK",
         "Validation Notes":        "",
         "Suggested Cert Path":     "",
@@ -754,6 +837,25 @@ def validate_record(row: dict, catalog: dict, agentforce: dict, devops: dict,
         notes.append("Skill not found in PSA catalog — verify skill name is correct.")
 
     _, af_entry = match(norm, agentforce)
+    if af_entry:
+        if _is_af_ready_skill(skill_name):
+            result["AF Ready Skill"] = "Yes (1 of 17)"
+        elif _is_af_expert_only_skill(skill_name):
+            result["AF Ready Skill"] = "Expert Only"
+        else:
+            result["AF Ready Skill"] = "Yes (1 of 17)"
+
+        is_enabled = employee in AF_ENABLED_EMPLOYEES
+        result["AF Enabled"] = "Yes" if is_enabled else "No"
+        if not is_enabled and rating >= 3:
+            notes.append(
+                f"AF NOT ENABLED: {employee} has not completed AF Enabled requirements "
+                f"(Agentforce Champion, Innovator, and Legend Trailhead superbadges + "
+                f"Salesforce Certified Data Cloud / Data 360 Consultant cert). "
+                f"AF skill ratings cannot count toward Agentforce Ready status until "
+                f"enablement is complete."
+            )
+
     if af_entry:
         min_req = af_entry["af_min_rating"]
         result["Is Agentforce Required"] = "Yes"
@@ -1003,7 +1105,7 @@ def write_feedback(records: list, path: Path, certifications: dict):
 
 
 def main():
-    global EMPLOYEE_GRADES
+    global EMPLOYEE_GRADES, AF_ENABLED_EMPLOYEES
 
     parser = argparse.ArgumentParser(description="Validate skill ratings against benchmarking criteria.")
     parser.add_argument("--ratings", type=Path, default=None,
@@ -1013,6 +1115,7 @@ def main():
     args = parser.parse_args()
 
     EMPLOYEE_GRADES = load_employee_grades(args.roster)
+    AF_ENABLED_EMPLOYEES = load_af_enabled(args.roster)
 
     ratings_file = args.ratings or find_most_recent_ratings()
 
