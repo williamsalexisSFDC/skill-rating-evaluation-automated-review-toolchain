@@ -27,6 +27,7 @@ jobs:
         run: |
           pip install \
             openpyxl \
+            playwright \
             google-api-python-client \
             google-auth-oauthlib \
             cryptography \
@@ -43,6 +44,7 @@ jobs:
           pytest tests/ \
             --cov=validate_skill_ratings \
             --cov=generate_review_artifacts \
+            --cov=mass_approve_skills \
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=90 \
