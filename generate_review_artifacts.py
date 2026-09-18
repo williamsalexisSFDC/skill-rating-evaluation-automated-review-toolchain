@@ -23,6 +23,16 @@ from datetime import datetime
 from pathlib import Path
 
 try:
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
+    _GDRIVE_API_AVAILABLE = True
+except ImportError:
+    _GDRIVE_API_AVAILABLE = False
+
+try:
     import openpyxl
     from openpyxl.styles import (
         PatternFill, Font, Alignment, Border, Side
@@ -171,7 +181,7 @@ def build_manager_tracker(ws, records: list):
         # VLOOKUP into the employee's tab (col A = Record ID, col M = Proposed Change)
         # INDIRECT("'"&LEFT(B{i},30)&"'!$A:$M") handles sheet names with spaces.
         proposed_formula = (
-            f'=IFERROR(VLOOKUP(A{i},INDIRECT("\'"&LEFT(B{i},30)&"\'\ !$A:$M"),13,FALSE),"")'
+            f'=IFERROR(VLOOKUP(A{i},INDIRECT("\'"&LEFT(B{i},30)&"\'!$A:$M"),13,FALSE),"")'
         )
 
         vals = [
@@ -533,6 +543,113 @@ def build_cover(ws, records: list, certifications: dict, ts: str):
         ws.row_dimensions[inst_row + s_off].height = 18
 
 
+# ── Google Drive upload ───────────────────────────────────────────────────────────────
+
+_GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+_TOKEN_PATH    = Path.home() / ".gdrive_token.json"
+_CREDS_PATH    = Path.home() / ".gdrive_credentials.json"
+
+_SETUP_INSTRUCTIONS = """
+  One-time setup to enable automated upload:
+
+  1. Go to https://console.cloud.google.com/ and create a project (or select one).
+  2. Enable the Google Drive API:
+       APIs & Services → Library → "Google Drive API" → Enable
+  3. Create OAuth credentials:
+       APIs & Services → Credentials → + Create Credentials → OAuth client ID
+       Application type: Desktop app  →  Create  →  Download JSON
+  4. Save the downloaded file as:
+       ~/.gdrive_credentials.json
+  5. Re-run this script — your browser will open once for consent, then
+     all future runs upload silently.
+"""
+
+
+def _get_drive_service():
+    creds = None
+    if _TOKEN_PATH.exists():
+        creds = Credentials.from_authorized_user_file(str(_TOKEN_PATH), _GDRIVE_SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                str(_CREDS_PATH), _GDRIVE_SCOPES
+            )
+            creds = flow.run_local_server(port=0, open_browser=True)
+        _TOKEN_PATH.write_text(creds.to_json())
+    return build("drive", "v3", credentials=creds)
+
+
+def upload_to_google_drive(xlsx_path: Path) -> None:
+    """Upload xlsx_path to Google Drive via the Drive API.
+
+    Requires a one-time OAuth credentials setup (see _SETUP_INSTRUCTIONS).
+    Subsequent runs reuse the saved token silently.
+    If skill_rating_review.xlsx already exists it is updated in-place.
+    """
+    import subprocess, shutil
+
+    file_name = xlsx_path.name
+
+    if not _GDRIVE_API_AVAILABLE:
+        print("\ngoogle-api-python-client not installed.")
+        print("  Run: pip3 install google-api-python-client google-auth-oauthlib")
+        _open_drive_for_manual_upload(xlsx_path)
+        return
+
+    if not _CREDS_PATH.exists():
+        print(f"\n  ~/.gdrive_credentials.json not found.{_SETUP_INSTRUCTIONS}")
+        _open_drive_for_manual_upload(xlsx_path)
+        return
+
+    print(f"\nUploading {file_name} to Google Drive...")
+    try:
+        service = _get_drive_service()
+    except Exception as exc:
+        print(f"  OAuth failed: {exc}")
+        _open_drive_for_manual_upload(xlsx_path)
+        return
+
+    mime  = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    media = MediaFileUpload(str(xlsx_path), mimetype=mime, resumable=True)
+
+    existing = service.files().list(
+        q=f"name='{file_name}' and trashed=false",
+        spaces="drive",
+        fields="files(id,name)",
+    ).execute().get("files", [])
+
+    if existing:
+        file_id = existing[0]["id"]
+        service.files().update(fileId=file_id, media_body=media).execute()
+        print(f"  Updated existing file (ID {file_id}).")
+    else:
+        f = service.files().create(
+            body={"name": file_name}, media_body=media, fields="id"
+        ).execute()
+        print(f"  Uploaded new file (ID {f['id']}).")
+
+    print("  Google Drive upload complete.")
+
+
+def _open_drive_for_manual_upload(xlsx_path: Path) -> None:
+    """Open Google Drive in Chrome and reveal the file in Finder so it's easy to drag in."""
+    import subprocess
+    print(f"\n  Opening Google Drive in Chrome for manual upload.")
+    print(f"  File to upload: {xlsx_path}")
+    print(f"  Drag it into the Drive window, or use New → File upload.\n")
+    try:
+        subprocess.run(
+            ["osascript", "-e",
+             'tell application "Google Chrome" to open location "https://drive.google.com/drive/my-drive"'],
+            check=False,
+        )
+        subprocess.run(["open", "-R", str(xlsx_path)], check=False)
+    except Exception:
+        pass
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────────────
 
 def find_latest_detail() -> Path:
@@ -596,7 +713,10 @@ def main():
     out_path = DOWNLOADS / "skill_rating_review.xlsx"
     wb.save(out_path)
     print(f"\nSaved: {out_path}")
-    print(f"Upload to Google Drive → File → Save as Google Sheets")
+
+    upload_to_google_drive(out_path)
+
+    print(f"\nNext step: open the file in Google Drive → File → Save as Google Sheets")
     print(f"Then share individual tabs with each employee.")
 
 
