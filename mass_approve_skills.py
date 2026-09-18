@@ -114,8 +114,13 @@ _GET_ALL_ROWS_JS = (
 }"""
 )
 
-# Selects (clicks the selection-column cell of) every row whose data-id is in
-# the provided array.  Returns { selected: N, missing: [id, ...] }.
+# Selects every row whose data-id is in the provided array.
+# Strategy A: Bryntum widget programmatic API (grid._instance.selectRecords).
+# Strategy B (fallback): click .b-check-cell — Bryntum's CSS class for the
+# selection-column cell.  querySelector returns the FIRST .b-check-cell in the
+# row, which is the row-selection column; the Aspiration column also renders as
+# .b-check-cell but appears later in the DOM so it is never matched first.
+# Returns { selected: N, missing: [id, ...] }.
 _SELECT_BY_IDS_JS = (
     "async (recordIds) => { "
     + _FIND_EL_FN
@@ -127,23 +132,44 @@ _SELECT_BY_IDS_JS = (
     if (!scroller) return { error: 'no-scroller' };
 
     const toSelect = new Set(recordIds);
+
+    // --- Strategy A: Bryntum widget programmatic API ---
+    const gridEl = sr.querySelector('.b-gridbase');
+    const grid = gridEl && (gridEl._instance || gridEl._widget || gridEl.widget);
+    if (grid && grid.store && typeof grid.selectRecords === 'function') {
+        const records = (grid.store.records || []).filter(r => toSelect.has(String(r.id)));
+        grid.selectRecords(records);
+        await new Promise(r => setTimeout(r, 300));
+        const selectedIds = new Set((grid.selectedRecords || []).map(r => String(r.id)));
+        return {
+            selected: selectedIds.size,
+            missing: recordIds.filter(id => !selectedIds.has(id))
+        };
+    }
+
+    // --- Strategy B: DOM click on .b-check-cell (row-selection column) ---
     const selected = new Set();
 
     function clickVisible() {
-        for (const row of sr.querySelectorAll('.b-grid-row')) {
+        for (const row of sr.querySelectorAll('.b-grid-row[data-id]')) {
             const id = row.dataset.id;
             if (!toSelect.has(id) || selected.has(id)) continue;
-            const cell = row.querySelector('[data-column-id="ma_selection-column"]');
-            if (cell) { cell.click(); selected.add(id); }
+            // First .b-check-cell in the row is always the selection column
+            const cell = row.querySelector('.b-check-cell') ||
+                         row.querySelectorAll('.b-grid-cell')[0];
+            if (cell) {
+                const inner = cell.querySelector('input[type=checkbox]') ||
+                              cell.querySelector('.b-checkbox');
+                (inner || cell).click();
+                selected.add(id);
+            }
         }
     }
 
     clickVisible();
-
-    const totalHeight = scroller.scrollHeight;
     const step = Math.max(scroller.clientHeight, 100);
     let pos = step;
-    while (pos <= totalHeight + step && selected.size < toSelect.size) {
+    while (pos <= scroller.scrollHeight + step && selected.size < toSelect.size) {
         scroller.scrollTop = pos;
         await new Promise(res => setTimeout(res, 300));
         clickVisible();
@@ -152,12 +178,12 @@ _SELECT_BY_IDS_JS = (
     scroller.scrollTop = 0;
     return {
         selected: selected.size,
-        missing: [...toSelect].filter(id => !selected.has(id))
+        missing: recordIds.filter(id => !selected.has(id))
     };
 }"""
 )
 
-# Clears the current selection by clicking each selected row's selection cell.
+# Clears the current selection.  Same two-strategy pattern as _SELECT_BY_IDS_JS.
 _CLEAR_SELECTION_JS = (
     "() => { "
     + _FIND_EL_FN
@@ -165,9 +191,24 @@ _CLEAR_SELECTION_JS = (
     const host = findEl(document, 'c-bryntum-widget-host');
     if (!host) return;
     const sr = host.shadowRoot;
+
+    // Strategy A: Bryntum widget API
+    const gridEl = sr.querySelector('.b-gridbase');
+    const grid = gridEl && (gridEl._instance || gridEl._widget || gridEl.widget);
+    if (grid && typeof grid.deselectAll === 'function') {
+        grid.deselectAll();
+        return;
+    }
+
+    // Strategy B: click .b-check-cell on each selected row to deselect
     for (const row of sr.querySelectorAll('.b-grid-row.b-selected, .b-grid-row[aria-selected="true"]')) {
-        const cell = row.querySelector('[data-column-id="ma_selection-column"]');
-        if (cell) cell.click();
+        const cell = row.querySelector('.b-check-cell') ||
+                     row.querySelectorAll('.b-grid-cell')[0];
+        if (cell) {
+            const inner = cell.querySelector('input[type=checkbox]') ||
+                          cell.querySelector('.b-checkbox');
+            (inner || cell).click();
+        }
     }
 }"""
 )
