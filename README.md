@@ -67,6 +67,45 @@ This status is stored in `team_roster.csv` (see [Input Files — team_roster.csv
 
 "AF Enabled but Not Ready" means the employee has completed the required enablement but has not yet accumulated the qualifying Resource Requests or reached 3+ across all 17 key skills required for the Agentforce Ready designation.
 
+**Agentforce Readiness Levels (Salesforce Agentforce Readiness Definition):**
+
+| Level | Prerequisites |
+|---|---|
+| **AF Enabled** | Agentforce Champion + Innovator + Legend Trailhead superbadges AND Salesforce Certified Data Cloud / Data 360 Consultant cert |
+| **AF Ready** | AF Enabled + **3+ on all 17 key skills** + at least 1 qualifying Agentforce Resource Request (post-Oct 2024, ≥90 days, active status) |
+| **AF Expert** | AF Ready + 2+ complex Agentforce projects + 4+ on ≥80% of the 17 skills + 3+ on all 4 advanced Expert-only skills |
+
+**The 17 Agentforce Ready Key Skills** (all must be rated 3+ for AF Ready):
+
+| # | Skill | Validation Tier |
+|---|---|---|
+| 1 | Build and Deploy Technical Capabilities | Tier 1 — Cert gate (Agentforce Specialist) |
+| 2 | Development Lifecycle Frameworks | Tier 1 — Cert gate (Agentforce Specialist) |
+| 3 | Retrieval Augmented Generation | Tier 3 — Delivery evidence (cert + 2+ RRs) |
+| 4 | Design and Configure Solutions | Tier 1 — Cert gate (Agentforce Specialist) |
+| 5 | Conversation Design | Tier 3 — Delivery evidence (cert + 2+ RRs) |
+| 6 | Prompt Engineering | Tier 1 — Cert gate (Agentforce Specialist) |
+| 7 | Prompt Builder | Tier 1 — Cert gate (Agentforce Specialist) |
+| 8 | Agentforce Delivery | Tier 3 — Delivery evidence (cert + 2+ RRs) |
+| 9 | Agentforce Testing | Tier 3 — Delivery evidence (cert + 2+ RRs) |
+| 10 | Data 360 (aka: Data Cloud) for Agentforce | Tier 1 — Cert gate (**Data Cloud cert**, not Agentforce Specialist) |
+| 11 | Flow | Tier 1 — Cert gate (Agentforce Specialist or platform cert) |
+| 12 | AI Consulting | Tier 2 — Grade ceiling |
+| 13 | Action Planning | Tier 1 — Cert gate (Agentforce Specialist) |
+| 14 | Demonstrate Business Acumen | Tier 2 — Grade ceiling |
+| 15 | Executive Alignment | Tier 2 — Grade ceiling |
+| 16 | Agility | Tier 2 — Grade ceiling |
+| 17 | Agentforce Security | Tier 1 — Cert gate (Agentforce Specialist) |
+
+**4 Expert-only Advanced Skills** (needed at 3+ for AF Expert, not counted in the 17):
+
+| Skill | Validation Tier |
+|---|---|
+| Agent Performance Tracking and Optimization | Tier 3 — Delivery evidence |
+| Agentforce Troubleshooting | Tier 1 — Cert gate |
+| AI Ecosystem and Frameworks | Tier 3 — Delivery evidence |
+| Agentic Delivery | Tier 3 — Delivery evidence |
+
 ### Tier 2 — Grade / Tenure Gate
 
 Applies to professional competency skills: **Demonstrate Business Acumen**, **AI Consulting**, **Executive Alignment**, **Agility**.
@@ -207,6 +246,18 @@ Ramandeep Kaur,Grade 5,Yes
 ---
 
 ## Validation Logic and Flag Conditions
+
+### Flag 0 — AF Not Enabled (Informational)
+
+**Condition:** The employee is not listed as AF Enabled in `team_roster.csv` AND the rating on any Agentforce-designated skill is 3+.
+
+**Output behavior:** An `AF NOT ENABLED:` note appears in the Flags column. This note is **informational only** — it does not change the Pre-Disposition. If the rating is otherwise fully justified (cert on file, qualifying RRs on file, rating at or above minimum), the record still shows **Approve** (green) with the informational note visible. The note becomes **Discuss** (yellow) only when other issues exist alongside it (e.g., a CERT: or catalog flag). It becomes **Change Required** (red) only when an `AGENTFORCE:` gate also fails.
+
+**What the note means:** AF skill ratings accumulate in the system, but they cannot count toward the employee's Agentforce Ready or Agentforce Expert designation until AF Enabled prerequisites are complete (Agentforce Champion, Innovator, and Legend Trailhead superbadges + Salesforce Certified Data Cloud / Data 360 Consultant cert).
+
+**Output columns added for AF skills:**
+- `AF Ready Skill` — `Yes (1 of 17)` if the skill is one of the 17 Agentforce Ready Key Skills; `Expert Only` if it is one of the 4 Expert-only advanced skills
+- `AF Enabled` — `Yes` or `No` based on `team_roster.csv`
 
 ### Flag 1 — Skill Not in PSA Catalog
 
