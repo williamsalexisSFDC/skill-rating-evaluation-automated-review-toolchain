@@ -411,9 +411,11 @@ class TestLoadEmployeeGrades:
         assert result["Alice Test"] == "Grade 7"
         assert result["Bob Test"] == "Grade 5"
 
-    def test_falls_back_to_hardcoded(self, tmp_path):
+    def test_falls_back_to_hardcoded(self, tmp_path, monkeypatch):
+        # Patch DOWNLOADS so the secondary lookup (DOWNLOADS / "team_roster.csv")
+        # also misses — otherwise the real team_roster.csv in the repo is found.
+        monkeypatch.setattr(vsr, "DOWNLOADS", tmp_path)
         result = vsr.load_employee_grades(tmp_path / "nonexistent.csv")
-        # Should get the hardcoded fallback with known employees
         assert "Craig Scott" in result
         assert result["Craig Scott"] == "Grade 7"
 

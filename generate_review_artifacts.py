@@ -29,7 +29,7 @@ try:
     from google_auth_oauthlib.flow import InstalledAppFlow
     from google.auth.transport.requests import Request
     _GDRIVE_API_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     _GDRIVE_API_AVAILABLE = False
 
 try:
@@ -39,7 +39,7 @@ try:
     )
     from openpyxl.utils import get_column_letter
     from openpyxl.formatting.rule import FormulaRule
-except ImportError:
+except ImportError:  # pragma: no cover
     sys.exit("openpyxl not found.  Run: pip3 install openpyxl --break-system-packages")
 
 DOWNLOADS = Path(__file__).parent
@@ -722,5 +722,5 @@ def main():
     print(f"Then share individual tabs with each employee.")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
