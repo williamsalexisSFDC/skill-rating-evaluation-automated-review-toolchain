@@ -2,11 +2,9 @@
 """
 Scrape Agentforce-related Resource Requests from org62 for direct reports.
 
-Two modes:
-  Generic (--manager-id):  Crawl the org chart from any manager's User page to discover
-                           direct reports dynamically, then scrape each report's RRs.
-                           Also writes team_roster.csv with names, User IDs, and grades.
-  Legacy (no args):        Use the hardcoded My_Team41 contact list view (Alexis's team).
+Crawls the org chart from a manager's User page to discover direct reports dynamically,
+then scrapes each report's Resource Requests. Also writes team_roster.csv with names,
+User IDs, and grades.
 
 Two-pass RR approach:
   Pass 1 — List view: extract RR URL, Status, Start Date for all RRs per contact.
@@ -26,14 +24,11 @@ Evidence thresholds (used by validate_skill_ratings.py):
 
 Outputs:
   ~/Downloads/agentforce_resource_requests.csv
-  ~/Downloads/team_roster.csv   (--manager-id mode only)
+  ~/Downloads/team_roster.csv
 
 Usage:
     pip3 install playwright --break-system-packages && playwright install chromium
-    # Generic — any manager:
     python3 scrape_agentforce_resource_requests.py --manager-id 005Ded...
-    # Legacy — Alexis's hardcoded list view:
-    python3 scrape_agentforce_resource_requests.py
 """
 
 import argparse
@@ -55,9 +50,8 @@ except ImportError:
         "Run: pip3 install playwright --break-system-packages && playwright install chromium"
     )
 
-DOWNLOADS   = Path(__file__).parent
-ORG62_BASE  = "https://org62.lightning.force.com"
-MY_TEAM_URL = f"{ORG62_BASE}/lightning/o/Contact/list?filterName=My_Team41"
+DOWNLOADS  = Path(__file__).parent
+ORG62_BASE = "https://org62.lightning.force.com"
 
 ROSTER_FIELDS = ["Employee", "User ID", "Contact URL", "Grade"]
 
@@ -313,50 +307,6 @@ def save_roster(team: list[dict], path: Path):
     print(f"Roster saved ({len(team)} members) → {path.name}")
 
 
-# ── Contact discovery (legacy list-view mode) ────────────────────────────────────────────────
-
-def get_contacts(page) -> list[dict]:
-    """
-    Extract team members from the My_Team41 list view.
-
-    Lightning list views render name links inside rowheader cells using web components
-    with shadow DOM. Playwright's role-based locators (get_by_role) pierce shadow DOM
-    automatically; document.querySelectorAll does not.
-
-    Contact record URLs in the list view use the form /lightning/r/{RecordId}/view
-    (no object-type name in the path).  We extract the ID and later construct the
-    explicit Contact related-list URL: /lightning/r/Contact/{ID}/related/...
-    """
-    time.sleep(2)  # let Lightning finish rendering rows
-
-    contacts = []
-    seen: set[str] = set()
-
-    try:
-        row_headers = page.get_by_role("rowheader").all()
-        for header in row_headers:
-            try:
-                link = header.locator("a").first
-                href = link.get_attribute("href", timeout=500) or ""
-                text = (link.inner_text(timeout=500) or "").strip()
-                if text and href and href not in seen:
-                    url = href if href.startswith("http") else ORG62_BASE + href
-                    contacts.append({"name": text, "url": url})
-                    seen.add(href)
-            except Exception:
-                continue
-    except Exception as e:
-        print(f"  get_contacts error: {e}")
-
-    if not contacts:
-        shot = DOWNLOADS / "debug_contact_list.png"
-        page.screenshot(path=str(shot), full_page=True)
-        print(f"  No contacts found. Debug screenshot → {shot.name}")
-        print(f"  URL: {page.url}  |  Title: {page.title()}")
-
-    return contacts
-
-
 # ── Pass 1: RR list extraction ───────────────────────────────────────────────────────────────
 
 def _extract_rr_list_page(page) -> list[dict]:
@@ -582,71 +532,46 @@ def main():
     parser.add_argument(
         "--manager-id",
         metavar="USER_ID",
-        help=(
-            "Salesforce User ID of the manager whose direct reports to crawl "
-            "(e.g. 005Ded...).  When omitted, falls back to the legacy My_Team41 "
-            "Contact list view."
-        ),
+        required=True,
+        help="Salesforce User ID of the manager whose direct reports to crawl (e.g. 005Ded...).",
     )
     parser.add_argument(
         "--roster-out",
         metavar="PATH",
         default=str(DOWNLOADS / "team_roster.csv"),
-        help="Where to write team_roster.csv (default: ~/Downloads/team_roster.csv). "
-             "Only written in --manager-id mode.",
+        help="Where to write team_roster.csv (default: ~/Downloads/team_roster.csv).",
     )
     args = parser.parse_args()
 
     all_rows: list[dict] = []
 
     with org62_session() as page:
-        if args.manager_id:
-            # ── Generic mode: org-chart traversal ──────────────────────────────────
-            print(f"Generic mode — manager User ID: {args.manager_id}")
-            print("Navigate to org62 and log in if prompted. Waiting for page load…\n")
+        print(f"Manager User ID: {args.manager_id}")
+        print("Navigate to org62 and log in if prompted. Waiting for page load…\n")
 
-            # Navigate to manager's User page first so the browser can handle login
-            manager_url = f"{ORG62_BASE}/lightning/r/User/{args.manager_id}/view"
-            page.goto(manager_url)
-            try:
-                # Wait until at least one list item (detail field) is visible — means the
-                # page has rendered past the login screen
-                page.get_by_role("listitem").first.wait_for(timeout=120_000)
-            except PwTimeout:
-                print("Timed out waiting for manager's User page. Check your login.")
-                return
+        manager_url = f"{ORG62_BASE}/lightning/r/User/{args.manager_id}/view"
+        page.goto(manager_url)
+        try:
+            page.get_by_role("listitem").first.wait_for(timeout=120_000)
+        except PwTimeout:
+            print("Timed out waiting for manager's User page. Check your login.")
+            return
 
-            team = build_team_from_manager(page, args.manager_id)
-            if not team:
-                print("No direct reports discovered — nothing to scrape.")
-                return
+        team = build_team_from_manager(page, args.manager_id)
+        if not team:
+            print("No direct reports discovered — nothing to scrape.")
+            return
 
-            # Save roster so validate_skill_ratings.py can pick it up automatically
-            save_roster(team, Path(args.roster_out))
+        save_roster(team, Path(args.roster_out))
 
-            # Build contact list from team roster (same shape as legacy contacts list)
-            contacts = [
-                {"name": m["name"], "url": m["contact_url"]}
-                for m in team
-                if m["contact_url"]
-            ]
-            skipped = [m["name"] for m in team if not m["contact_url"]]
-            if skipped:
-                print(f"\nSkipping (no Contact found): {skipped}")
-
-        else:
-            # ── Legacy mode: hardcoded My_Team41 list view ────────────────────
-            print("Legacy mode — navigating to My_Team41 contact list…")
-            page.goto(MY_TEAM_URL)
-
-            try:
-                page.get_by_role("rowheader").first.wait_for(timeout=90_000)
-            except PwTimeout:
-                print("Waiting for login / page load…")
-                page.get_by_role("rowheader").first.wait_for(timeout=120_000)
-
-            time.sleep(1)
-            contacts = get_contacts(page)
+        contacts = [
+            {"name": m["name"], "url": m["contact_url"]}
+            for m in team
+            if m["contact_url"]
+        ]
+        skipped = [m["name"] for m in team if not m["contact_url"]]
+        if skipped:
+            print(f"\nSkipping (no Contact found): {skipped}")
 
         if not contacts:
             print("No contacts found.")
