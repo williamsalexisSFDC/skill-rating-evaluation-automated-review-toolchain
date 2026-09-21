@@ -19,9 +19,13 @@ Requirements:
 
 import csv
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
+from bryntum_grid import WAIT_FOR_GRID_JS  # noqa: E402
 
 TARGET_URL = "https://org62.lightning.force.com/lightning/n/Mass_Approve_Skills_and_Certification"
 OUTPUT_DIR = Path(__file__).parent
@@ -116,18 +120,7 @@ def wait_for_page(page):
     print("Login detected. Waiting for the grid to load...")
 
     # Wait for the Bryntum grid container to appear
-    page.wait_for_function(
-        """() => {
-            function findEl(root, sel) {
-                if (root.querySelector(sel)) return true;
-                for (const el of root.querySelectorAll('*'))
-                    if (el.shadowRoot && findEl(el.shadowRoot, sel)) return true;
-                return false;
-            }
-            return findEl(document, 'c-bryntum-widget-host');
-        }""",
-        timeout=60_000
-    )
+    page.wait_for_function(WAIT_FOR_GRID_JS, timeout=60_000)
 
     # Extra wait for rows to render
     page.wait_for_timeout(2000)
