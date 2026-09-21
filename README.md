@@ -3,7 +3,7 @@
 **Author:** Alexis Williams, Senior Manager Technical Consulting
 **Scope:** Direct report team (5 ICs, Grades 5–7)
 **Cycle:** FY26 Annual Skill & Certification Rating Review
-**Last updated:** 2026-09-18 — Iteration 7: `mass_approve_skills.py` added — two-pass Playwright automation (en-masse approve + individual reject with Discussion Notes) against the org62 Mass Approve Skills and Certification page; uses Bryntum shadow DOM grid interaction pattern consistent with `scrape_skill_ratings.py`.
+**Last updated:** 2026-09-21 — Iteration 8: Claude Code slash commands added — `setup.sh` installs seven project-specific `/run-workflow`, `/scrape-*`, `/validate-ratings`, `/generate-review`, `/mass-approve`, and `/update-toolchain` commands to `~/.claude/commands/`.
 
 ---
 
@@ -476,6 +476,34 @@ Salesforce announced Agentforce at Dreamforce in September 2024, with general av
 
 ---
 
+## Claude Code Skills
+
+Seven slash commands wrap the full pipeline so you can drive it in natural language from any Claude Code session.
+
+### One-time setup
+
+```bash
+chmod +x setup.sh && ./setup.sh
+```
+
+This copies the skill files from `.claude/commands/` to `~/.claude/commands/` — the global location Claude Code scans at startup. Re-run after pulling to pick up any updated skill definitions. Start a new session for the commands to become active.
+
+> **Why a local copy?** Claude Code loads project-level `.claude/commands/` files only when the session root is the exact project directory. Installing to `~/.claude/commands/` makes the commands available in every session regardless of where you start Claude Code.
+
+### Available commands
+
+| Command | What it does |
+|---------|-------------|
+| `/run-workflow` | Full guided walkthrough — all five steps in order, stops at the manual gate, reports final summary |
+| `/scrape-ratings` | Step 1: scrape skill/cert records from org62 Mass Approve page |
+| `/scrape-agentforce` | Step 2: scrape Agentforce Resource Request delivery evidence per direct report |
+| `/validate-ratings` | Step 3: apply 9 rule sets; report flag counts and per-employee summary |
+| `/generate-review` | Step 4: build XLSX, upload to Drive, remind about manual gate |
+| `/mass-approve` | Step 5: pre-flight check → run approval/rejection passes → report results from `mass_approve_results.json` |
+| `/update-toolchain` | Describe any change in natural language → Claude implements, updates tests + README, commits, waits for PR to merge, reports a summary |
+
+---
+
 ## Usage
 
 ```bash
@@ -527,3 +555,4 @@ python3 mass_approve_skills.py
 | 2026-09-18 | v5 | `mass_approve_skills.py` added — initial Playwright automation for org62 Mass Approve page. Two-pass design: en-masse approve with standard PL comment; individual reject with Discussion Notes from Manager Tracker CSV. 37 pytest unit tests, 99% coverage. CI updated to include playwright in pip install and mass_approve_skills in coverage gate. |
 | 2026-09-18 | v6 | `mass_approve_skills.py` rewritten to use Bryntum shadow DOM grid interaction. The Mass Approve page renders via `c-bryntum-widget-host` — not a standard HTML table — so all row selection uses JavaScript evaluation traversing the shadow root (same pattern as `scrape_skill_ratings.py`). `wait_for_grid` uses `wait_for_function` with shadow-piercing JS. `select_rows_by_ids` scrolls the virtual grid and clicks `ma_selection-column` cells by record ID. Tests updated: 45 tests, 98% coverage. |
 | 2026-09-18 | v7 | Fixed modal textarea and confirm button selectors in `mass_approve_skills.py`. Textarea `id` is dynamic — replaced `get_by_label("Comments")` with `modal.locator("textarea.slds-textarea")`. Confirm button matched by `title` attribute (`"Approve/Reject Skill or Certification Rating"`) instead of role/name to avoid collision with same-text header buttons. Verified against actual DOM from live page. |
+| 2026-09-21 | v8 | Claude Code slash commands added. Seven skill files in `.claude/commands/` cover the full pipeline (`/run-workflow`, `/scrape-ratings`, `/scrape-agentforce`, `/validate-ratings`, `/generate-review`, `/mass-approve`) plus a dev-cycle command (`/update-toolchain`) for natural-language change requests. `setup.sh` installs them to `~/.claude/commands/` for global availability. `CLAUDE.md` added for session context. |
