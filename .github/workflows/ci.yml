@@ -113,15 +113,18 @@ jobs:
             echo "PR already exists -- skipping create"
           fi
 
-      - name: Enable auto-merge on PR
+      - name: Merge PR to main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Tests already passed (needs: test guarantees it) so merge directly.
+          # --auto would wait for a redundant PR-triggered CI re-run and silently
+          # no-op if "Allow auto-merge" isn't enabled in repo settings.
           PR_NUM=$(gh pr list --base main --head dev --state open --json number --jq '.[0].number // empty')
           if [ -n "$PR_NUM" ]; then
-            gh pr merge "$PR_NUM" --auto --merge \
-              && echo "Auto-merge enabled on PR #$PR_NUM" \
-              || echo "Auto-merge skipped (PR may already be merged or merging)"
+            gh pr merge "$PR_NUM" --merge \
+              && echo "Merged PR #$PR_NUM to main" \
+              || echo "Merge skipped (already merged or no permission)"
           else
             echo "No open PR found -- already merged or nothing to merge"
           fi
