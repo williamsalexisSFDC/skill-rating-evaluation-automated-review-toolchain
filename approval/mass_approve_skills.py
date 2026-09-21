@@ -36,8 +36,8 @@ CSV_PATH = (
     / "Downloads"
     / "skill_rating_review.xlsx - Manager Tracker.csv"
 )
-RESULTS_PATH = Path(__file__).parent / "mass_approve_results.json"
-SCREENSHOTS_DIR = Path(__file__).parent / "screenshots"
+RESULTS_PATH = Path(__file__).parent.parent / "mass_approve_results.json"
+SCREENSHOTS_DIR = Path(__file__).parent.parent / "screenshots"
 MASS_APPROVE_URL = (
     "https://org62.lightning.force.com/lightning/n/Mass_Approve_Skills_and_Certification"
 )

@@ -6,12 +6,12 @@ Five Python scripts automate the annual PSA skill-rating review cycle for a 5-pe
 
 | Step | Script | Trigger | Output |
 |------|--------|---------|--------|
-| 1 | `scrape_skill_ratings.py` | Manual | `skill_certification_ratings_<ts>.csv` |
-| 2 | `scrape_agentforce_resource_requests.py` | Manual | `agentforce_resource_requests.csv` |
-| 3 | `validate_skill_ratings.py` | Manual | `skill_validation_detail_<ts>.csv` |
-| 4 | `generate_review_artifacts.py` | Manual | `skill_rating_review.xlsx` → Google Drive |
+| 1 | `scraping/scrape_skill_ratings.py` | Manual | `skill_certification_ratings_<ts>.csv` |
+| 2 | `scraping/scrape_agentforce_resource_requests.py` | Manual | `agentforce_resource_requests.csv` |
+| 3 | `validation/validate_skill_ratings.py` | Manual | `skill_validation_detail_<ts>.csv` |
+| 4 | `reporting/generate_review_artifacts.py` | Manual | `skill_rating_review.xlsx` → Google Drive |
 | **MANUAL GATE** | Complete spreadsheet 1:1s, fill Discussion Notes + Final Action columns, export Manager Tracker tab as CSV to `~/Downloads/` | | |
-| 5 | `mass_approve_skills.py` | Manual | `mass_approve_results.json` |
+| 5 | `approval/mass_approve_skills.py` | Manual | `mass_approve_results.json` |
 
 ## Repo and CI/CD
 
