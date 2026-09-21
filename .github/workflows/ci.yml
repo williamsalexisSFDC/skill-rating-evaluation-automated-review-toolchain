@@ -47,6 +47,13 @@ jobs:
             --cov-fail-under=90 \
             -v
 
+      - name: Coverage summary
+        uses: py-cov-action/python-coverage-comment-action@v4.3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANNOTATE_MISSING_LINES: true
+          ANNOTATION_TYPE: warning
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v7
