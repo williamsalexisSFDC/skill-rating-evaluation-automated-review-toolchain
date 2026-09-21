@@ -39,14 +39,17 @@ Usage:
 import argparse
 import csv
 import re
+import sys
 import time
 from datetime import datetime, date
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
+
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
+    from playwright.sync_api import TimeoutError as PwTimeout
+    from playwright_session import org62_session  # noqa: E402
 except ImportError:
-    import sys
     sys.exit(
         "playwright not found.\n"
         "Run: pip3 install playwright --break-system-packages && playwright install chromium"
@@ -596,11 +599,7 @@ def main():
 
     all_rows: list[dict] = []
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False)
-        page    = browser.new_page()
-        page.set_viewport_size({"width": 1440, "height": 900})
-
+    with org62_session() as page:
         if args.manager_id:
             # ── Generic mode: org-chart traversal ──────────────────────────────────
             print(f"Generic mode — manager User ID: {args.manager_id}")
@@ -615,13 +614,11 @@ def main():
                 page.get_by_role("listitem").first.wait_for(timeout=120_000)
             except PwTimeout:
                 print("Timed out waiting for manager's User page. Check your login.")
-                browser.close()
                 return
 
             team = build_team_from_manager(page, args.manager_id)
             if not team:
                 print("No direct reports discovered — nothing to scrape.")
-                browser.close()
                 return
 
             # Save roster so validate_skill_ratings.py can pick it up automatically
@@ -653,7 +650,6 @@ def main():
 
         if not contacts:
             print("No contacts found.")
-            browser.close()
             return
 
         print(f"\nProcessing {len(contacts)} contacts: {[c['name'] for c in contacts]}\n")
@@ -662,8 +658,6 @@ def main():
             rows = process_contact(page, ct)
             all_rows.extend(rows)
             print()
-
-        browser.close()
 
     out = DOWNLOADS / "agentforce_resource_requests.csv"
     save(all_rows, out)

@@ -23,11 +23,9 @@ import datetime
 import json
 import shutil
 import sys
-import time
 from pathlib import Path
 
 from playwright.sync_api import TimeoutError as PWTimeout
-from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 from bryntum_grid import (  # noqa: E402
@@ -36,6 +34,7 @@ from bryntum_grid import (  # noqa: E402
     select_rows_by_ids,
     clear_selection,
 )
+from playwright_session import org62_session  # noqa: E402
 
 # Timestamp stamped on every screenshot filename for this process invocation
 _RUN_TS = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -282,7 +281,7 @@ def execute_rejection_pass(page, rejections, all_rows):
             fill_and_confirm_modal(page, notes, "Reject")
             entry["status"] = "success"
             screenshot(page, f"reject_{idx:02d}_02_done")
-            print(f"    Rejected OK.")
+            print("    Rejected OK.")
         except Exception as exc:
             entry["status"] = "failed"
             entry["error"] = str(exc)
@@ -307,11 +306,7 @@ def run():
     SCREENSHOTS_DIR.mkdir(exist_ok=True)
     print(f"Screenshots will be saved to: {SCREENSHOTS_DIR}")
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False, slow_mo=200)
-        context = browser.new_context(viewport={"width": 1400, "height": 900})
-        page = context.new_page()
-
+    with org62_session(slow_mo=200, viewport=(1400, 900)) as page:
         print(f"\n[1/4] Opening Mass Approve page: {MASS_APPROVE_URL}")
         page.goto(MASS_APPROVE_URL, wait_until="domcontentloaded")
 
@@ -338,7 +333,6 @@ def run():
         if not all_rows:
             take_debug_screenshot(page, "no_rows")
             print("ERROR: No rows found — check debug screenshot and verify the page loaded.")
-            browser.close()
             return
 
         screenshot(page, f"run_01_grid_loaded_{len(all_rows)}_rows")
@@ -381,7 +375,6 @@ def run():
         print(f"  Rejections: {summary}")
 
         input("\nPress ENTER to close the browser…")
-        browser.close()
 
 
 if __name__ == "__main__":

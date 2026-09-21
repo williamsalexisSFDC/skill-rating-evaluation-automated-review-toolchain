@@ -1,7 +1,6 @@
 """Tests for mass_approve_skills.py — targeting ≥90% coverage."""
 import csv
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -418,7 +417,7 @@ class TestExecuteApprovalPass:
     def test_no_button_click_when_zero_selected(self):
         page = _mock_page(evaluate_return={"selected": 0, "missing": ["R1"]})
         with patch("mass_approve_skills.click_page_button") as mock_click, \
-             patch("mass_approve_skills.fill_and_confirm_modal") as mock_fill:
+             patch("mass_approve_skills.fill_and_confirm_modal"):
             mas.execute_approval_pass(page, [{"employee": "X", "skill": "Y", "record_id": "R1"}])
 
         mock_click.assert_not_called()
@@ -480,7 +479,7 @@ class TestExecuteRejectionPass:
         with patch("mass_approve_skills.clear_selection"), \
              patch("mass_approve_skills.click_page_button"), \
              patch("mass_approve_skills.fill_and_confirm_modal"):
-            results = mas.execute_rejection_pass(
+            mas.execute_rejection_pass(
                 page, [self._item(record_id="")], live_rows
             )
 
@@ -546,26 +545,24 @@ class TestScreenshot:
 # ---------------------------------------------------------------------------
 
 class TestRun:
-    def _pw_mock(self):
+    def _session_mock(self):
+        """Return (context_manager, page) for patching org62_session."""
+        from contextlib import contextmanager
         page = _mock_page(evaluate_return={"rows": []})
-        context = MagicMock()
-        context.new_page.return_value = page
-        browser = MagicMock()
-        browser.new_context.return_value = context
-        pw = MagicMock()
-        pw.chromium.launch.return_value = browser
-        cm = MagicMock()
-        cm.__enter__ = MagicMock(return_value=pw)
-        cm.__exit__ = MagicMock(return_value=False)
-        return cm, page
+
+        @contextmanager
+        def _fake_session(*args, **kwargs):
+            yield page
+
+        return _fake_session, page
 
     def test_happy_path_no_records(self, tmp_path):
         results_file = tmp_path / "results.json"
-        cm, page = self._pw_mock()
+        session, page = self._session_mock()
         # At least one live row so the no-rows early-exit guard is skipped
         live_rows = [{"id": "R0", mas._COL_EMPLOYEE: "X", mas._COL_SKILL: "Y"}]
 
-        with patch("mass_approve_skills.sync_playwright", return_value=cm), \
+        with patch("mass_approve_skills.org62_session", session), \
              patch("mass_approve_skills.load_csv", return_value=([], [])), \
              patch("mass_approve_skills.wait_for_grid"), \
              patch("mass_approve_skills.get_all_rows", return_value=live_rows), \
@@ -582,12 +579,12 @@ class TestRun:
 
     def test_with_records_calls_both_passes(self, tmp_path):
         results_file = tmp_path / "results.json"
-        cm, page = self._pw_mock()
+        session, page = self._session_mock()
         approvals = [{"employee": "A", "skill": "S", "record_id": "R1"}]
         rejections = [{"employee": "B", "skill": "T", "record_id": "R2", "notes": "x"}]
         live_rows = [{"id": "R1", mas._COL_EMPLOYEE: "A", mas._COL_SKILL: "S"}]
 
-        with patch("mass_approve_skills.sync_playwright", return_value=cm), \
+        with patch("mass_approve_skills.org62_session", session), \
              patch("mass_approve_skills.load_csv", return_value=(approvals, rejections)), \
              patch("mass_approve_skills.wait_for_grid"), \
              patch("mass_approve_skills.get_all_rows", return_value=live_rows), \
@@ -605,7 +602,7 @@ class TestRun:
 
     def test_pwtimeout_on_grid_recovers(self, tmp_path):
         results_file = tmp_path / "results.json"
-        cm, page = self._pw_mock()
+        session, page = self._session_mock()
         from playwright.sync_api import TimeoutError as PWTimeout
 
         call_count = {"n": 0}
@@ -615,7 +612,7 @@ class TestRun:
             if call_count["n"] == 1:
                 raise PWTimeout("timeout")
 
-        with patch("mass_approve_skills.sync_playwright", return_value=cm), \
+        with patch("mass_approve_skills.org62_session", session), \
              patch("mass_approve_skills.load_csv", return_value=([], [])), \
              patch("mass_approve_skills.wait_for_grid",
                    side_effect=wait_grid_side_effect), \
@@ -632,9 +629,9 @@ class TestRun:
 
     def test_no_rows_found_exits_early(self, tmp_path):
         results_file = tmp_path / "results.json"
-        cm, page = self._pw_mock()
+        session, page = self._session_mock()
 
-        with patch("mass_approve_skills.sync_playwright", return_value=cm), \
+        with patch("mass_approve_skills.org62_session", session), \
              patch("mass_approve_skills.load_csv", return_value=([], [])), \
              patch("mass_approve_skills.wait_for_grid"), \
              patch("mass_approve_skills.get_all_rows", return_value=[]), \

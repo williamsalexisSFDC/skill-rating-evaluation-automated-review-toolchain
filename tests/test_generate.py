@@ -1,7 +1,4 @@
 """Tests for generate_review_artifacts.py — targeting ≥90% coverage."""
-import csv
-from pathlib import Path
-from collections import defaultdict
 
 import pytest
 import openpyxl
@@ -593,9 +590,12 @@ class TestUploadToGoogleDrive:
                 class R:
                     def execute(self):
                         return {"files": []}  # no existing file
+
                 return R()
+
             def create(self, **kwargs):
                 return mock_execute
+
             def update(self, **kwargs):
                 return mock_execute
 
@@ -625,12 +625,16 @@ class TestUploadToGoogleDrive:
                 class R:
                     def execute(self):
                         return {"files": [{"id": "existing-id", "name": "test.xlsx"}]}
+
                 return R()
+
             def update(self, fileId, **kwargs):
                 updated.append(fileId)
+
                 class R:
                     def execute(self):
                         return {}
+
                 return R()
 
         class MockService:

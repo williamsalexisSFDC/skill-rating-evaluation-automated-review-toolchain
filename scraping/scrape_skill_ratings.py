@@ -18,14 +18,14 @@ Requirements:
 """
 
 import csv
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 from bryntum_grid import WAIT_FOR_GRID_JS  # noqa: E402
+from playwright_session import org62_session  # noqa: E402
 
 TARGET_URL = "https://org62.lightning.force.com/lightning/n/Mass_Approve_Skills_and_Certification"
 OUTPUT_DIR = Path(__file__).parent
@@ -155,23 +155,16 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUT_DIR / f"skill_certification_ratings_{timestamp}.csv"
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False, slow_mo=50)
-        context = browser.new_context()
-        page = context.new_page()
-
-        print(f"Opening: {TARGET_URL}")
-        page.goto(TARGET_URL)
-
-        try:
+    try:
+        with org62_session(slow_mo=50) as page:
+            print(f"Opening: {TARGET_URL}")
+            page.goto(TARGET_URL)
             wait_for_page(page)
             records = scrape(page)
             to_csv(records, output_path)
             print(f"\nDone. {len(records)} records exported to:\n  {output_path}")
-        except PlaywrightTimeoutError:
-            print("\nTimed out waiting for login or page load. Please try again.")
-        finally:
-            browser.close()
+    except PlaywrightTimeoutError:
+        print("\nTimed out waiting for login or page load. Please try again.")
 
 
 if __name__ == "__main__":
