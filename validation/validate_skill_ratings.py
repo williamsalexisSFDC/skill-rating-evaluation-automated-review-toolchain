@@ -50,7 +50,7 @@ def _find_catalog_file(base: Path) -> Path:
 
 
 # ── File paths ──────────────────────────────────────────────────────────────────────────────────────
-DOWNLOADS = Path(__file__).parent
+DOWNLOADS = Path(__file__).parent.parent
 
 CATALOG_FILE     = _find_catalog_file(DOWNLOADS)
 AGENTFORCE_FILE  = DOWNLOADS / "Agentforce Ready and Expert Skills Ratings  - Agentforce Skills .csv"

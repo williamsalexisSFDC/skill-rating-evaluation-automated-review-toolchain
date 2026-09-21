@@ -42,7 +42,7 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("openpyxl not found.  Run: pip3 install openpyxl --break-system-packages")
 
-DOWNLOADS = Path(__file__).parent
+DOWNLOADS = Path(__file__).parent.parent
 
 
 # ── Colour palette ──────────────────────────────────────────────────────────────────────────────
