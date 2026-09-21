@@ -3,7 +3,58 @@
 **Author:** Alexis Williams, Senior Manager Technical Consulting
 **Scope:** Direct report team (5 ICs, Grades 5–7)
 **Cycle:** FY26 Annual Skill & Certification Rating Review
-**Last updated:** 2026-09-21 — Iteration 8: Claude Code slash commands added — `setup.sh` installs seven project-specific `/run-workflow`, `/scrape-*`, `/validate-ratings`, `/generate-review`, `/mass-approve`, and `/update-toolchain` commands to `~/.claude/commands/`.
+**Last updated:** 2026-09-21 — Iteration 9: Turnkey `setup.sh` with full dependency management; CI shell scripts extracted and BATS-tested; actionlint added to pre-commit and CI.
+
+---
+
+## Table of Contents
+
+- [Quick Start (Setup)](#quick-start-setup)
+- [Problem Statement](#problem-statement)
+- [Solution Overview](#solution-overview)
+- [The Three-Tier Evaluation Framework](#the-three-tier-evaluation-framework)
+- [Toolchain Components](#toolchain-components)
+- [Input Files](#input-files)
+- [Validation Logic and Flag Conditions](#validation-logic-and-flag-conditions)
+- [Industry Rationale and Supporting References](#industry-rationale-and-supporting-references)
+- [Claude Code Skills](#claude-code-skills)
+- [Usage](#usage)
+- [Iteration Log](#iteration-log)
+
+---
+
+## Quick Start (Setup)
+
+```bash
+git clone https://github.com/williamsalexisSFDC/skill-rating-evaluation-automated-review-toolchain.git
+cd skill-rating-evaluation-automated-review-toolchain
+chmod +x setup.sh && ./setup.sh
+```
+
+`setup.sh` is turnkey and idempotent — safe to re-run after pulling updates. It installs:
+
+| What | How |
+|---|---|
+| Python 3 | Homebrew (`python3`) if missing |
+| `openpyxl`, `playwright`, `google-api-python-client`, `google-auth-oauthlib`, `cryptography` | `pip install -r requirements.txt` |
+| Playwright Chromium browser | `python3 -m playwright install chromium` |
+| Claude Code slash commands | Copied from `.claude/commands/` → `~/.claude/commands/` |
+
+**Dev dependencies** (test/lint tooling — add `--dev` flag):
+
+```bash
+./setup.sh --dev
+```
+
+Adds: `pytest`, `pytest-cov`, `flake8`, `pre-commit`, `yamllint`, `bats-core`, `actionlint`
+
+**Verbose mode** (show full installer output):
+
+```bash
+./setup.sh --dev --verbose
+```
+
+After setup, start a new Claude Code session for the slash commands to become active.
 
 ---
 
@@ -482,11 +533,7 @@ Seven slash commands wrap the full pipeline so you can drive it in natural langu
 
 ### One-time setup
 
-```bash
-chmod +x setup.sh && ./setup.sh
-```
-
-This copies the skill files from `.claude/commands/` to `~/.claude/commands/` — the global location Claude Code scans at startup. Re-run after pulling to pick up any updated skill definitions. Start a new session for the commands to become active.
+See [Quick Start (Setup)](#quick-start-setup) at the top of this document. Run `./setup.sh` — it installs all runtime dependencies, the Playwright browser, and the slash commands in one step.
 
 > **Why a local copy?** Claude Code loads project-level `.claude/commands/` files only when the session root is the exact project directory. Installing to `~/.claude/commands/` makes the commands available in every session regardless of where you start Claude Code.
 
@@ -556,3 +603,4 @@ python3 mass_approve_skills.py
 | 2026-09-18 | v6 | `mass_approve_skills.py` rewritten to use Bryntum shadow DOM grid interaction. The Mass Approve page renders via `c-bryntum-widget-host` — not a standard HTML table — so all row selection uses JavaScript evaluation traversing the shadow root (same pattern as `scrape_skill_ratings.py`). `wait_for_grid` uses `wait_for_function` with shadow-piercing JS. `select_rows_by_ids` scrolls the virtual grid and clicks `ma_selection-column` cells by record ID. Tests updated: 45 tests, 98% coverage. |
 | 2026-09-18 | v7 | Fixed modal textarea and confirm button selectors in `mass_approve_skills.py`. Textarea `id` is dynamic — replaced `get_by_label("Comments")` with `modal.locator("textarea.slds-textarea")`. Confirm button matched by `title` attribute (`"Approve/Reject Skill or Certification Rating"`) instead of role/name to avoid collision with same-text header buttons. Verified against actual DOM from live page. |
 | 2026-09-21 | v8 | Claude Code slash commands added. Seven skill files in `.claude/commands/` cover the full pipeline (`/run-workflow`, `/scrape-ratings`, `/scrape-agentforce`, `/validate-ratings`, `/generate-review`, `/mass-approve`) plus a dev-cycle command (`/update-toolchain`) for natural-language change requests. `setup.sh` installs them to `~/.claude/commands/` for global availability. `CLAUDE.md` added for session context. |
+| 2026-09-21 | v9 | Turnkey `setup.sh` rewritten with full dependency management (brew, pip, Playwright browser, pre-commit hooks, bats, actionlint). Supports `--dev` and `--verbose` flags. README TOC and Quick Start section added. CI shell scripts (`detect_yaml_changes.sh`, `sync_dev_to_main.sh`, `create_or_skip_pr.sh`) extracted from inline workflow YAML into `.github/scripts/` and covered by 10 BATS unit tests. `actionlint` added to pre-commit and CI, gated on YAML file changes. |
