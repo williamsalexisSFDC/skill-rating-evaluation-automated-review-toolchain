@@ -38,6 +38,7 @@ chmod +x setup.sh && ./setup.sh
 | Python 3 | Homebrew (`python3`) if missing |
 | `openpyxl`, `playwright`, `google-api-python-client`, `google-auth-oauthlib`, `cryptography` | `pip install -r requirements.txt` |
 | Playwright Chromium browser | `python3 -m playwright install chromium` |
+| Claude Code CLI | Salesforce installer (`plugins.codegen.salesforceresearch.ai`) — opens browser for Google SSO |
 | Claude Code slash commands | Copied from `.claude/commands/` → `~/.claude/commands/` |
 
 **Dev dependencies** (test/lint tooling — add `--dev` flag):
