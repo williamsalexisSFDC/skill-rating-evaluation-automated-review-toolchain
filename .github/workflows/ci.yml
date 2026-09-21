@@ -35,19 +35,26 @@ jobs:
             flake8 \
             flake8-bugbear \
             flake8-cognitive-complexity
+          # actionlint: validates workflow expressions, contexts, and shell scripts
+          bash <(curl -sL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          sudo mv actionlint /usr/local/bin/
+          # bats-core: runs CI shell script unit tests
+          sudo apt-get install -y bats
 
       - name: Detect changed YAML files
         id: yaml_changes
-        run: |
-          if git show --name-only --format="" HEAD | grep -qE '\.ya?ml$'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: bash .github/scripts/detect_yaml_changes.sh
 
       - name: Lint YAML files
         if: steps.yaml_changes.outputs.changed == 'true'
         run: pre-commit run yamllint --all-files
+
+      - name: Lint GitHub Actions workflows (actionlint)
+        if: steps.yaml_changes.outputs.changed == 'true'
+        run: actionlint
+
+      - name: Test CI shell scripts (bats)
+        run: bats tests/test_ci_shell.bats
 
       - name: Lint Python (flake8)
         run: flake8 scraping/ validation/ reporting/ approval/ lib/ tests/
@@ -118,46 +125,13 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git fetch origin main
-          BEHIND=$(git rev-list --count HEAD..origin/main)
-          AHEAD=$(git rev-list --count origin/main..HEAD)
-          if [ "$BEHIND" -gt 0 ] && [ "$AHEAD" -eq 0 ]; then
-            echo "dev is $BEHIND commit(s) behind main, 0 ahead -- fast-forwarding"
-            git merge origin/main --ff-only
-            git push origin HEAD:dev
-          elif [ "$BEHIND" -gt 0 ]; then
-            echo "dev is $BEHIND behind and $AHEAD ahead of main -- diverged, PR will merge both"
-          else
-            echo "dev is up to date with main"
-          fi
+          bash .github/scripts/sync_dev_to_main.sh
 
       - name: Create PR to main if not exists
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          AHEAD=$(gh api repos/${{ github.repository }}/compare/main...dev --jq '.ahead_by')
-          if [ "$AHEAD" -eq 0 ]; then
-            echo "dev has no commits ahead of main -- no PR needed"
-            exit 0
-          fi
-          EXISTING=$(gh pr list --base main --head dev --state open --json number --jq 'length')
-          if [ "$EXISTING" -eq 0 ]; then
-            {
-              echo "Automated PR: all tests passed with >=90% coverage."
-              echo ""
-              echo "**Triggered by:** push to \`dev\`"
-              echo "**Status:** tests passed, coverage gate met"
-              echo ""
-              echo "Generated with Claude Code"
-            } > /tmp/pr_body.txt
-            gh pr create \
-              --base main \
-              --head dev \
-              --title "dev -> main: automated merge (tests passed)" \
-              --body-file /tmp/pr_body.txt
-          else
-            echo "PR already exists -- skipping create"
-          fi
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash .github/scripts/create_or_skip_pr.sh
 
       - name: Merge PR to main
         env:

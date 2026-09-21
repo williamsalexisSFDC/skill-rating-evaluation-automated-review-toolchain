@@ -16,6 +16,11 @@ repos:
         args: [-c, .yamllint.yaml]
         files: \.(yml|yaml)$
 
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+
   - repo: https://github.com/PyCQA/flake8
     rev: 7.3.0
     hooks:
