@@ -31,10 +31,16 @@ jobs:
             pytest \
             pytest-cov \
             pre-commit \
-            yamllint
+            yamllint \
+            flake8 \
+            flake8-bugbear \
+            flake8-cognitive-complexity
 
       - name: Lint YAML files
         run: pre-commit run yamllint --all-files
+
+      - name: Lint Python (flake8)
+        run: flake8 scraping/ validation/ reporting/ approval/ lib/ tests/
 
       - name: Run tests with coverage gate
         run: |

@@ -924,7 +924,7 @@ def validate_record(row: dict, catalog: dict, agentforce: dict, devops: dict,
 
         if issues:
             notes.append(
-                f"AGENTFORCE: Delivery evidence insufficient — "
+                "AGENTFORCE: Delivery evidence insufficient — "
                 + "; ".join(issues) + "."
             )
 
@@ -1133,7 +1133,7 @@ def main():
 
     ratings_file = args.ratings or find_most_recent_ratings()
 
-    print(f"\nLoading data...")
+    print("\nLoading data...")
     print(f"  Ratings:      {ratings_file.name}")
     print(f"  Catalog:      {CATALOG_FILE.name}")
     print(f"  Agentforce:   {AGENTFORCE_FILE.name}")

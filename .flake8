@@ -1,0 +1,25 @@
+[flake8]
+max-line-length = 120
+max-complexity = 15
+max-cognitive-complexity = 25
+
+# E241/E221: multiple spaces after ':' / before operator — intentional column
+#            alignment in dict literals throughout this codebase.
+# W503:      line break before binary operator — preferred style here.
+# E402:      module-level import not at top — necessary for sys.path manipulation
+#            before importing from lib/ in scripts that run directly.
+extend-ignore = E241, E221, W503, E402
+
+per-file-ignores =
+    # These functions exceed the thresholds and are flagged for future refactor.
+    # validate_record: cyclomatic 31, cognitive 80 — 9-rule validation monolith
+    # Justification strings are intentionally verbose; long lines are readable prose.
+    validation/validate_skill_ratings.py:C901,CCR001,E501
+    # _summarize_notes: cyclomatic 20, cognitive 39 — dense NLP classification logic
+    # build_employee_tab: cognitive 25 — multi-column XLSX layout builder
+    # F401: subprocess is a local import inside _open_drive_for_manual_upload;
+    #       flake8 doesn't trace its use in the same function scope.
+    reporting/generate_review_artifacts.py:C901,CCR001,E501,F401
+    # Test data strings and inline assertions routinely exceed 120 chars.
+    tests/test_validate.py:E501,E127
+    tests/test_generate.py:E501

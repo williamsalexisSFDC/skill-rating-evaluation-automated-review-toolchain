@@ -1,8 +1,6 @@
 """Tests for validate_skill_ratings.py — targeting ≥90% coverage."""
 import csv
-import sys
 import textwrap
-from pathlib import Path
 
 import pytest
 
@@ -215,7 +213,8 @@ class TestFindCatalogFile:
         f1 = tmp_path / "All Skills and Certifications-2025-01-01.csv"
         f2 = tmp_path / "All Skills and Certifications-2026-06-01.csv"
         f1.write_text("name\n")
-        import time; time.sleep(0.01)
+        import time
+        time.sleep(0.01)
         f2.write_text("name\n")
         result = vsr._find_catalog_file(tmp_path)
         assert result == f2

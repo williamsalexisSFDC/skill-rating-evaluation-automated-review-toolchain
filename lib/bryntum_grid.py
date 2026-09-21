@@ -5,7 +5,7 @@ The Mass Approve page renders its grid inside a Web Component with Shadow DOM
 (c-bryntum-widget-host). All grid interaction requires shadow-DOM-aware JS.
 """
 
-from playwright.sync_api import Page, TimeoutError as PWTimeout
+from playwright.sync_api import Page
 
 # ---------------------------------------------------------------------------
 # JS helpers (shadow-DOM aware)

@@ -2,3 +2,6 @@ pytest
 pytest-cov
 pre-commit
 yamllint
+flake8
+flake8-bugbear
+flake8-cognitive-complexity

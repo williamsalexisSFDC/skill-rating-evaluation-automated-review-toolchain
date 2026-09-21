@@ -37,7 +37,6 @@ try:
     from openpyxl.styles import (
         PatternFill, Font, Alignment, Border, Side
     )
-    from openpyxl.utils import get_column_letter
     from openpyxl.formatting.rule import FormulaRule
 except ImportError:  # pragma: no cover
     sys.exit("openpyxl not found.  Run: pip3 install openpyxl --break-system-packages")
@@ -170,6 +169,7 @@ TRACKER_COLS = [
     "Agreed Rating",                # col N — manager fills in
     "Final Action",                 # col O — Approve / Change To X / Reject
 ]
+
 
 def build_manager_tracker(ws, records: list):
     ws.title = "Manager Tracker"
@@ -605,7 +605,7 @@ def upload_to_google_drive(xlsx_path: Path) -> None:
     Subsequent runs reuse the saved token silently.
     If skill_rating_review.xlsx already exists it is updated in-place.
     """
-    import subprocess, shutil
+    import subprocess
 
     file_name = xlsx_path.name
 
@@ -652,10 +652,10 @@ def upload_to_google_drive(xlsx_path: Path) -> None:
 
 def _open_drive_for_manual_upload(xlsx_path: Path) -> None:
     """Open Google Drive in Chrome and reveal the file in Finder so it's easy to drag in."""
-    import subprocess
-    print(f"\n  Opening Google Drive in Chrome for manual upload.")
+    import subprocess  # noqa: F401 — used in subprocess.run calls below
+    print("\n  Opening Google Drive in Chrome for manual upload.")
     print(f"  File to upload: {xlsx_path}")
-    print(f"  Drag it into the Drive window, or use New → File upload.\n")
+    print("  Drag it into the Drive window, or use New → File upload.\n")
     try:
         subprocess.run(
             ["osascript", "-e",
@@ -704,8 +704,6 @@ def main():
         by_emp[r["Resource"]].append(r)
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-    ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
-
     wb = openpyxl.Workbook()
     wb.remove(wb.active)  # remove default sheet
 
@@ -725,7 +723,7 @@ def main():
         ws = wb.create_sheet()
         build_employee_tab(ws, emp, grade, emp_records, certs)
         print(f"  → {emp}: {len(emp_records)} skills, "
-              f"{sum(1 for r in emp_records if r['Validation Status']=='NEEDS REVIEW')} flagged")
+              f"{sum(1 for r in emp_records if r['Validation Status'] == 'NEEDS REVIEW')} flagged")
 
     out_path = DOWNLOADS / "skill_rating_review.xlsx"
     wb.save(out_path)
@@ -733,8 +731,8 @@ def main():
 
     upload_to_google_drive(out_path)
 
-    print(f"\nNext step: open the file in Google Drive → File → Save as Google Sheets")
-    print(f"Then share individual tabs with each employee.")
+    print("\nNext step: open the file in Google Drive → File → Save as Google Sheets")
+    print("Then share individual tabs with each employee.")
 
 
 if __name__ == "__main__":  # pragma: no cover
