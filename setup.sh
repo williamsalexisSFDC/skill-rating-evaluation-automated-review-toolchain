@@ -164,6 +164,37 @@ if [[ "$INSTALL_DEV" == true ]] && need pre-commit; then
   run pre-commit install --install-hooks && ok "pre-commit hooks"
 fi
 
+# ── Claude Code CLI ───────────────────────────────────────────────────────────
+
+log "Checking Claude Code CLI…"
+
+if need claude; then
+  ok "claude (already installed)"
+else
+  if is_mac; then
+    log "Installing Claude Code via Salesforce installer…"
+    echo "    The installer will open a browser tab for Google authentication."
+    echo "    Sign in with your @salesforce.com account, then return here."
+    echo ""
+    if curl -fsSL https://plugins.codegen.salesforceresearch.ai/claude/install.sh | bash; then
+      # Reload PATH so the claude binary is findable in this shell session
+      if [[ -f "$HOME/.zshrc" ]]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.zshrc" 2>/dev/null || true
+      elif [[ -f "$HOME/.bashrc" ]]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.bashrc" 2>/dev/null || true
+      fi
+      need claude && ok "claude" || \
+        warn "claude installed but not yet in PATH — open a new terminal to use it"
+    else
+      warn "Claude Code install failed — run manually: curl -fsSL https://plugins.codegen.salesforceresearch.ai/claude/install.sh | bash"
+    fi
+  else
+    warn "Claude Code auto-install is macOS only — see your IT portal for Linux instructions"
+  fi
+fi
+
 # ── Claude Code slash commands ────────────────────────────────────────────────
 
 log "Installing Claude Code slash commands…"
