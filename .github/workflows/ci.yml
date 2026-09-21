@@ -48,11 +48,37 @@ jobs:
             -v
 
       - name: Coverage summary
-        uses: py-cov-action/python-coverage-comment-action@v4.3
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANNOTATE_MISSING_LINES: true
-          ANNOTATION_TYPE: warning
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import xml.etree.ElementTree as ET, os
+
+          tree = ET.parse("coverage.xml")
+          root = tree.getroot()
+          total_rate = float(root.attrib.get("line-rate", 0)) * 100
+
+          rows = []
+          for cls in root.iter("class"):
+              fname = cls.attrib.get("filename", "")
+              if not fname:
+                  continue
+              lines = cls.findall(".//line")
+              stmts = len(lines)
+              miss = sum(1 for l in lines if l.attrib.get("hits", "0") == "0")
+              rate = ((stmts - miss) / stmts * 100) if stmts else 100.0
+              rows.append((fname, stmts, miss, rate))
+
+          rows.sort(key=lambda r: r[0])
+          gate = total_rate >= 90
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("## Coverage\n\n")
+              f.write("| File | Stmts | Miss | Cover |\n")
+              f.write("|------|------:|-----:|------:|\n")
+              for fname, stmts, miss, rate in rows:
+                  icon = "✅" if rate >= 90 else "⚠️"
+                  f.write(f"| `{fname}` | {stmts} | {miss} | {icon} {rate:.0f}% |\n")
+              f.write(f"\n**Total: {'✅' if gate else '❌'} {total_rate:.1f}%** (gate: ≥90%)\n")
+          EOF
 
       - name: Upload coverage report
         if: always()
